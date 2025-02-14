@@ -299,9 +299,12 @@ class Game {
             enemy.speed *= 0.7;
           }
 
-          // 하트 효과 (흡혈)
+          // 하트 효과 (흡혈) - 수정
           if (this.effects.heart && !bullet.isRicochet) {
-            this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
+            // 20% 확률로만 체력 회복
+            if (Math.random() < 0.2) {
+              this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
+            }
           }
 
           // 클로버 효과 (도탄)
@@ -386,8 +389,6 @@ class Game {
   // 카드 효과 적용 수정
   applyCardEffect(type, number) {
     this.collectedCards[type].push(number);
-
-    // 카드 등급에 따른 효과 강화
     const powerMultiplier = this.getCardPowerMultiplier(number);
 
     switch (type) {
@@ -396,17 +397,14 @@ class Game {
         this.player.bulletDamage += 1 * powerMultiplier;
         break;
       case "heart":
-        this.effects.heart = true;
-        this.player.maxHp += 1 * powerMultiplier;
+        this.effects.heart = true; // 흡혈 효과만 적용
         break;
       case "diamond":
         this.effects.diamond = true;
-        // 슬로우 효과 강화
         this.effects.slowPower = 0.7 - 0.1 * powerMultiplier;
         break;
       case "clover":
         this.effects.clover = true;
-        // 도탄 데미지 증가
         this.effects.ricochetDamage = 0.5 + 0.1 * powerMultiplier;
         break;
     }
