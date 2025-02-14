@@ -57,10 +57,17 @@ class Game {
 
     this.isGameOver = false;
 
-    this.setupEventListeners();
-    this.setupMouseTracking();
-    this.setupMobileControls();
-    this.gameLoop();
+    // 플레이어 이미지 로드
+    this.playerImage = new Image();
+    this.playerImage.src = "player.png"; // 이미지 파일 경로
+
+    // 이미지 로드 완료 후 게임 시작
+    this.playerImage.onload = () => {
+      this.setupEventListeners();
+      this.setupMouseTracking();
+      this.setupMobileControls();
+      this.gameLoop();
+    };
   }
 
   setupEventListeners() {
@@ -507,13 +514,27 @@ class Game {
     this.ctx.stroke();
 
     if (!this.player.invincible || Math.floor(Date.now() / 100) % 2) {
-      this.ctx.fillStyle = "red";
-      this.ctx.fillRect(
-        this.player.x - this.player.size / 2,
-        this.player.y - this.player.size / 2,
+      // 이미지로 플레이어 그리기
+      this.ctx.save(); // 현재 컨텍스트 상태 저장
+
+      // 플레이어 회전 (마우스 방향으로)
+      this.ctx.translate(this.player.x, this.player.y);
+      const angle = Math.atan2(
+        this.mouseY - this.player.y,
+        this.mouseX - this.player.x
+      );
+      this.ctx.rotate(angle);
+
+      // 이미지 그리기
+      this.ctx.drawImage(
+        this.playerImage,
+        -this.player.size / 2,
+        -this.player.size / 2,
         this.player.size,
         this.player.size
       );
+
+      this.ctx.restore(); // 컨텍스트 상태 복원
     }
 
     this.ctx.fillStyle = "#ffff00";
