@@ -55,6 +55,8 @@ class Game {
       size: 60,
     };
 
+    this.isGameOver = false;
+
     this.setupEventListeners();
     this.setupMouseTracking();
     this.setupMobileControls();
@@ -123,6 +125,7 @@ class Game {
   }
 
   movePlayer() {
+    if (this.isGameOver) return;
     if (this.isMobile && this.joystick.active) {
       const dx = this.joystick.moveX - this.joystick.startX;
       const dy = this.joystick.moveY - this.joystick.startY;
@@ -157,6 +160,7 @@ class Game {
   }
 
   spawnEnemy() {
+    if (this.isGameOver) return;
     if (Math.random() < 0.016) {
       const side = Math.floor(Math.random() * 4);
       let x, y;
@@ -243,15 +247,40 @@ class Game {
   }
 
   gameOver() {
+    this.isGameOver = true;
     alert("게임 오버!");
+
+    this.resetGame();
+  }
+
+  resetGame() {
     this.player.hp = 5;
+    this.player.maxHp = 5;
+    this.player.bulletDamage = 1;
     this.enemies = [];
+    this.bullets = [];
+    this.cards = [];
     this.score = 0;
     this.player.x = this.canvas.width / 2;
     this.player.y = this.canvas.height / 2;
+    this.effects = {
+      spade: 0,
+      heart: false,
+      diamond: false,
+      clover: false,
+    };
+    this.collectedCards = {
+      spade: [],
+      heart: [],
+      diamond: [],
+      clover: [],
+    };
+    this.isGameOver = false;
   }
 
   updateBullets() {
+    if (this.isGameOver) return;
+
     const now = Date.now();
     if (now - this.player.lastShot > this.player.shotInterval) {
       this.shoot();
@@ -619,11 +648,13 @@ class Game {
   }
 
   gameLoop() {
-    this.movePlayer();
-    this.spawnEnemy();
-    this.updateEnemies();
-    this.updateBullets();
-    this.updateCards();
+    if (!this.isGameOver) {
+      this.movePlayer();
+      this.spawnEnemy();
+      this.updateEnemies();
+      this.updateBullets();
+      this.updateCards();
+    }
     this.draw();
     requestAnimationFrame(() => this.gameLoop());
   }
