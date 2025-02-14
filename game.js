@@ -56,6 +56,7 @@ class Game {
     };
 
     this.isGameOver = false;
+    this.gameLoopId = null;
 
     // 플레이어 이미지 로드
     this.playerImage = new Image();
@@ -66,7 +67,7 @@ class Game {
       this.setupEventListeners();
       this.setupMouseTracking();
       this.setupMobileControls();
-      this.gameLoop();
+      this.startGame();
     };
   }
 
@@ -254,22 +255,31 @@ class Game {
   }
 
   gameOver() {
-    this.isGameOver = true;
+    this.stopGame();
     alert("게임 오버!");
-
     this.resetGame();
+    this.startGame();
   }
 
   resetGame() {
-    this.player.hp = 5;
-    this.player.maxHp = 5;
-    this.player.bulletDamage = 1;
+    this.player = {
+      x: this.canvas.width / 2,
+      y: this.canvas.height / 2,
+      size: 30,
+      speed: 4,
+      hp: 5,
+      maxHp: 5,
+      invincible: false,
+      invincibleTime: 1000,
+      bulletSpeed: 5.6,
+      lastShot: 0,
+      shotInterval: 600,
+      bulletDamage: 1,
+    };
     this.enemies = [];
     this.bullets = [];
     this.cards = [];
     this.score = 0;
-    this.player.x = this.canvas.width / 2;
-    this.player.y = this.canvas.height / 2;
     this.effects = {
       spade: 0,
       heart: false,
@@ -282,7 +292,6 @@ class Game {
       diamond: [],
       clover: [],
     };
-    this.isGameOver = false;
   }
 
   updateBullets() {
@@ -668,6 +677,19 @@ class Game {
     }
   }
 
+  startGame() {
+    this.isGameOver = false;
+    this.gameLoop();
+  }
+
+  stopGame() {
+    this.isGameOver = true;
+    if (this.gameLoopId) {
+      cancelAnimationFrame(this.gameLoopId);
+      this.gameLoopId = null;
+    }
+  }
+
   gameLoop() {
     if (!this.isGameOver) {
       this.movePlayer();
@@ -675,9 +697,9 @@ class Game {
       this.updateEnemies();
       this.updateBullets();
       this.updateCards();
+      this.draw();
+      this.gameLoopId = requestAnimationFrame(() => this.gameLoop());
     }
-    this.draw();
-    requestAnimationFrame(() => this.gameLoop());
   }
 }
 
