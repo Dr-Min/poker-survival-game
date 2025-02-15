@@ -777,6 +777,7 @@ class Game {
                     bullet.isRicochet = true;
                     bullet.color = "#00ff00";
                     bullet.damage *= 0.6; // 도탄 데미지는 60%로 감소
+                    bullet.hitEnemies = [enemy.id]; // 현재 맞은 적만 기록
                     
                     // 도탄의 방향을 랜덤하게 변경
                     const randomAngle = Math.random() * Math.PI * 2;
@@ -790,6 +791,25 @@ class Game {
                     });
                     
                     hasHit = false; // 도탄은 계속 진행
+                } else if (bullet.isRicochet) {
+                    // 도탄 총알이 다른 적을 맞췄을 때
+                    console.log('도탄 데미지 처리:', {
+                        적_체력_이전: enemy.hp,
+                        도탄_데미지: bullet.damage,
+                        적_ID: enemy.id,
+                        총알_ID: bullet.id,
+                        이미_맞은_적: bullet.hitEnemies
+                    });
+                    
+                    enemy.hp -= bullet.damage;
+                    bullet.hitEnemies.push(enemy.id);
+                    
+                    console.log('도탄 데미지 처리 후:', {
+                        적_체력_이후: enemy.hp,
+                        데미지_적용여부: enemy.hp < enemy.maxHp
+                    });
+                    
+                    hasHit = true; // 도탄이 적을 맞추면 사라짐
                 } else {
                     hasHit = !bullet.isPiercing; // 관통 총알이 아닌 경우에만 사라짐
                 }
