@@ -86,13 +86,43 @@ class Game {
     this.playerImage = new Image();
     this.playerImage.src = "player.png"; // 이미지 파일 경로
 
-    // 이미지 로드 완료 후 게임 시작
-    this.playerImage.onload = () => {
-      this.setupEventListeners();
-      this.setupMouseTracking();
-      this.setupMobileControls();
-      this.startGame();
+    // 카드 이미지 로딩 시스템 추가
+    this.cardImages = {
+      spade: {},
+      heart: {},
+      diamond: {},
+      clover: {}
     };
+
+    // 이미지 로딩 프로미스 배열
+    const imagePromises = [];
+
+    // 각 무늬와 숫자에 대한 이미지 로드
+    ['spade', 'heart', 'diamond', 'clover'].forEach(type => {
+      for (let i = 1; i <= 13; i++) {
+        const img = new Image();
+        const promise = new Promise((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject();
+        });
+        img.src = `V2_4x/${type}/${i}.png`;
+        this.cardImages[type][i] = img;
+        imagePromises.push(promise);
+      }
+    });
+
+    // 모든 이미지가 로드되면 게임 시작
+    Promise.all(imagePromises)
+      .then(() => {
+        console.log('모든 카드 이미지 로드 완료');
+        this.setupEventListeners();
+        this.setupMouseTracking();
+        this.setupMobileControls();
+        this.startGame();
+      })
+      .catch(error => {
+        console.error('카드 이미지 로드 실패:', error);
+      });
 
     this.weapons = {
       highCard: { name: "리볼버", damage: 1 },
@@ -816,6 +846,23 @@ class Game {
 
   drawCardSymbol(x, y, type, size, number = null) {
     if (number !== null) {
+      // 이미지로 카드 그리기
+      const img = this.cardImages[type][number];
+      if (img) {
+        const scale = size / 40; // 이미지 크기 조정 (기본 이미지가 40x40 픽셀이라고 가정)
+        this.ctx.drawImage(
+          img,
+          x - size,
+          y - size,
+          size * 2,
+          size * 2
+        );
+        return;
+      }
+    }
+
+    // 이미지 로드 실패시 기존 방식으로 그리기 (폴백)
+    if (number !== null) {
       this.ctx.fillStyle = "#FFFFFF";
       this.ctx.fillRect(x - size, y - size * 1.4, size * 2, size * 2.8);
       this.ctx.strokeStyle = "#000000";
@@ -1117,7 +1164,7 @@ class Game {
       this.ctx.fillStyle = "#ffffff";
       this.ctx.font = "16px Arial";
       this.ctx.textAlign = "right";
-      this.ctx.fillText("v.3", this.canvas.width - 10, 25);
+      this.ctx.fillText("v.3_1", this.canvas.width - 10, 25);
       this.ctx.textAlign = "left";
       
       // 카드 영역 제목
