@@ -117,11 +117,47 @@ class Game {
     this.isRoundTransition = false;
     this.roundTransitionDuration = 3000; // 3초
     this.roundTransitionStartTime = 0;
+
+    this.isPaused = false;
+    this.showDebugMenu = false;
+    this.debugOptions = {
+      selectedCard: { type: 'spade', number: 1 },
+      cardTypes: ['spade', 'heart', 'diamond', 'clover'],
+      cardNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    };
   }
 
   setupEventListeners() {
-    window.addEventListener("keydown", (e) => (this.keys[e.key] = true));
+    window.addEventListener("keydown", (e) => {
+      this.keys[e.key] = true;
+      
+      // ESC 키 처리
+      if (e.key === "Escape") {
+        this.isPaused = !this.isPaused;
+        this.showDebugMenu = this.isPaused;
+      }
+
+      // 디버그 메뉴에서 카드 추가
+      if (this.showDebugMenu && e.key === "Enter") {
+        this.applyCardEffect(
+          this.debugOptions.selectedCard.type,
+          this.debugOptions.selectedCard.number
+        );
+      }
+    });
+    
     window.addEventListener("keyup", (e) => (this.keys[e.key] = false));
+
+    // 디버그 메뉴 클릭 이벤트
+    this.canvas.addEventListener("click", (e) => {
+      if (!this.showDebugMenu) return;
+      
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      this.handleDebugMenuClick(x, y);
+    });
   }
 
   setupMouseTracking() {
@@ -181,7 +217,8 @@ class Game {
   }
 
   movePlayer() {
-    if (this.isGameOver) return;
+    if (this.isGameOver || this.isPaused) return;
+    
     if (this.isMobile && this.joystick.active) {
       const dx = this.joystick.moveX - this.joystick.startX;
       const dy = this.joystick.moveY - this.joystick.startY;
@@ -192,11 +229,16 @@ class Game {
         this.player.y += (dy / distance) * this.player.speed;
       }
     } else {
-      if (this.keys["ArrowUp"]) this.player.y -= this.player.speed;
-      if (this.keys["ArrowDown"]) this.player.y += this.player.speed;
-      if (this.keys["ArrowLeft"]) this.player.x -= this.player.speed;
-      if (this.keys["ArrowRight"]) this.player.x += this.player.speed;
+      // WASD 및 화살표 키 이동
+      if (this.keys["ArrowUp"] || this.keys["w"]) this.player.y -= this.player.speed;
+      if (this.keys["ArrowDown"] || this.keys["s"]) this.player.y += this.player.speed;
+      if (this.keys["ArrowLeft"] || this.keys["a"]) this.player.x -= this.player.speed;
+      if (this.keys["ArrowRight"] || this.keys["d"]) this.player.x += this.player.speed;
     }
+
+    // 플레이어가 화면 밖으로 나가지 않도록 제한
+    this.player.x = Math.max(this.player.size/2, Math.min(this.canvas.width - this.player.size/2, this.player.x));
+    this.player.y = Math.max(this.player.size/2, Math.min(this.canvas.height - this.player.size/2, this.player.y));
   }
 
   shoot() {
@@ -307,8 +349,18 @@ class Game {
       isRicochet: false,
       isPiercing,
       color,
-      bounceCount: 0
+      bounceCount: 0  // 명시적으로 bounceCount 초기화
     };
+    
+    console.log('총알 생성:', {
+      위치: `(${x.toFixed(2)}, ${y.toFixed(2)})`,
+      속도: `(${bullet.speedX.toFixed(2)}, ${bullet.speedY.toFixed(2)})`,
+      크기: size,
+      데미지: damage,
+      도탄여부: bullet.isRicochet,
+      바운스횟수: bullet.bounceCount
+    });
+    
     this.bullets.push(bullet);
     return bullet;
   }
@@ -659,14 +711,26 @@ class Game {
   }
 
   handleRicochet(originalBullet, hitEnemy) {
+    console.log('도탄 시도:', {
+      클로버개수: this.effects.clover.count,
+      도탄확률: this.effects.clover.ricochetChance,
+      현재바운스: originalBullet.bounceCount,
+      최대바운스: this.effects.clover.bounceCount
+    });
+
     const maxBounces = this.effects.clover.bounceCount + 1;
-    if (originalBullet.bounceCount >= maxBounces) return;
+    if (originalBullet.bounceCount >= maxBounces) {
+      console.log('최대 바운스 도달');
+      return;
+    }
 
     const nearbyEnemies = this.enemies.filter(e => 
       !e.isDead && 
       e !== hitEnemy && 
       this.getDistance(hitEnemy, e) < 150
     );
+
+    console.log('주변 적 발견:', nearbyEnemies.length);
 
     if (nearbyEnemies.length > 0) {
       const targets = nearbyEnemies
@@ -679,11 +743,13 @@ class Game {
           target.x - hitEnemy.x
         );
         
+        // 속도 계산 수정
+        const speed = this.player.bulletSpeed * 0.8;
         const newBullet = {
           x: hitEnemy.x,
           y: hitEnemy.y,
-          speedX: Math.cos(angle) * this.player.bulletSpeed * 0.8,
-          speedY: Math.sin(angle) * this.player.bulletSpeed * 0.8,
+          speedX: Math.cos(angle) * speed,
+          speedY: Math.sin(angle) * speed,
           size: originalBullet.size * 0.7,
           damage: originalBullet.damage * 0.6,
           isRicochet: true,
@@ -694,12 +760,13 @@ class Game {
         
         this.bullets.push(newBullet);
         
-        console.log(`도탄 총알 생성:`, {
+        console.log('도탄 총알 생성 완료:', {
+          시작위치: `(${newBullet.x.toFixed(2)}, ${newBullet.y.toFixed(2)})`,
+          목표위치: `(${target.x.toFixed(2)}, ${target.y.toFixed(2)})`,
           각도: (angle * 180 / Math.PI).toFixed(2) + '도',
-          데미지: newBullet.damage.toFixed(2),
+          속도: `(${newBullet.speedX.toFixed(2)}, ${newBullet.speedY.toFixed(2)})`,
           크기: newBullet.size.toFixed(2),
-          속도X: newBullet.speedX.toFixed(2),
-          속도Y: newBullet.speedY.toFixed(2),
+          데미지: newBullet.damage.toFixed(2),
           바운스횟수: newBullet.bounceCount
         });
       });
@@ -986,355 +1053,379 @@ class Game {
   }
 
   draw() {
+    if (this.isGameOver) return;
+
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    const now = Date.now();
-
-    // 기본 텍스트 정렬 설정
-    this.ctx.textAlign = "left";
-
-    // UI 배경 그리기 (왼쪽)
-    this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-    this.ctx.fillRect(10, 10, 300, 230);
-
-    // 점수 표시 (왼쪽 상단 고정)
-    this.ctx.fillStyle = "white";
-    this.ctx.font = "24px Arial";
-    this.ctx.fillText(`점수: ${this.score}`, 20, 40);
-
-    // 라운드 정보 표시 (왼쪽 상단 고정)
-    this.ctx.fillText(`라운드: ${this.round}`, 20, 70);
     
-    // 라운드 진행 상황 표시
-    const progressText = `처치: ${this.enemiesKilledInRound}/${this.enemiesRequiredForNextRound}`;
-    this.ctx.fillText(progressText, 20, 100);
-    
-    // 남은 시간 표시
-    const timeLeft = Math.max(0, Math.ceil((this.roundDuration - (now - this.roundStartTime)) / 1000));
-    this.ctx.fillText(`남은 시간: ${timeLeft}초`, 20, 130);
+    // 일반 게임 요소 그리기
+    if (!this.showDebugMenu) {
+      const now = Date.now();
 
-    // 현재 무기 정보 표시
-    this.ctx.font = "20px Arial";
-    this.ctx.fillText(`무기: ${this.currentWeapon.name}`, 20, 160);
-    this.ctx.fillText(`공격력: ${this.currentWeapon.damage}`, 20, 190);
+      // 기본 텍스트 정렬 설정
+      this.ctx.textAlign = "left";
 
-    // 체력바
-    const healthBarWidth = 200;
-    const healthBarHeight = 20;
-    const healthBarX = 20;
-    const healthBarY = 210;
+      // UI 배경 그리기 (왼쪽)
+      this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      this.ctx.fillRect(10, 10, 300, 230);
 
-    // 체력바 배경
-    this.ctx.fillStyle = "#444444";
-    this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
-
-    // 현재 체력
-    const currentHealthWidth = (this.player.hp / this.player.maxHp) * healthBarWidth;
-    this.ctx.fillStyle = "#ff0000";
-    this.ctx.fillRect(healthBarX, healthBarY, currentHealthWidth, healthBarHeight);
-
-    // 체력바 테두리
-    this.ctx.strokeStyle = "#ffffff";
-    this.ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
-
-    // 카드 영역 배경 (오른쪽 상단 고정)
-    const cardAreaX = this.canvas.width - 320;
-    this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-    this.ctx.fillRect(cardAreaX - 10, 10, 310, 180);
-    
-    // 버전 표시 (오른쪽 최상단)
-    this.ctx.fillStyle = "#ffffff";
-    this.ctx.font = "16px Arial";
-    this.ctx.textAlign = "right";
-    this.ctx.fillText("v.3", this.canvas.width - 10, 25);
-    this.ctx.textAlign = "left";
-    
-    // 카드 영역 제목
-    this.ctx.fillStyle = "white";
-    this.ctx.font = "18px Arial";
-    this.ctx.fillText("수집된 카드", cardAreaX, 35);
-    
-    // 현재 족보 표시
-    const currentHand = this.checkPokerHand();
-    this.ctx.fillStyle = "#ffff00";
-    this.ctx.font = "16px Arial";
-    this.ctx.fillText(`현재 족보: ${this.getPokerHandName(currentHand)}`, cardAreaX, 160);
-    
-    // 효과 표시 영역
-    this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-    this.ctx.fillRect(cardAreaX - 10, 190, 310, 200);
-
-    // 각 무늬별 효과 표시
-    this.ctx.font = "14px Arial";
-    let effectY = 215;
-
-    // 스페이드 효과
-    if (this.effects.spade.count > 0) {
-        this.ctx.fillStyle = "#ffffff";
-        this.ctx.fillText("♠ 스페이드 효과:", cardAreaX, effectY);
-        effectY += 20;
-        if (this.effects.spade.damageIncrease > 0) {
-            this.ctx.fillText(`- 데미지 ${this.effects.spade.damageIncrease * 100}% 증가`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.spade.penetrationDamage > 0) {
-            this.ctx.fillText(`- 관통 데미지 ${this.effects.spade.penetrationDamage * 100}% 증가`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.spade.criticalChance > 0) {
-            this.ctx.fillText(`- 치명타 확률 ${this.effects.spade.criticalChance * 100}%`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.spade.aoeEnabled) {
-            this.ctx.fillText(`- 범위 데미지 활성화`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.spade.ultimateEndTime > now) {
-            this.ctx.fillText(`- 궁극기 발동중!`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-    }
-
-    // 하트 효과
-    if (this.effects.heart.count > 0) {
-        this.ctx.fillStyle = "#ff6666";
-        this.ctx.fillText("♥ 하트 효과:", cardAreaX, effectY);
-        effectY += 20;
-        if (this.effects.heart.lifeSteal > 0) {
-            this.ctx.fillText(`- 흡혈량 ${this.effects.heart.lifeSteal * 100}%`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.heart.convertChance > 0) {
-            this.ctx.fillText(`- 아군 전환 확률 ${this.effects.heart.convertChance * 100}%`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.heart.maxHpIncrease > 0) {
-            this.ctx.fillText(`- 최대 체력 ${this.effects.heart.maxHpIncrease * 100}% 증가`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.heart.allyPowerUp) {
-            this.ctx.fillText(`- 아군 공격력 50% 증가`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.heart.ultimateEndTime > now) {
-            this.ctx.fillText(`- 궁극기 발동중!`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-    }
-
-    // 다이아몬드 효과
-    if (this.effects.diamond.count > 0) {
-        this.ctx.fillStyle = "#ff66ff";
-        this.ctx.fillText("◆ 다이아몬드 효과:", cardAreaX, effectY);
-        effectY += 20;
-        if (this.effects.diamond.slowAmount > 0) {
-            this.ctx.fillText(`- 적 이동속도 ${this.effects.diamond.slowAmount * 100}% 감소`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.diamond.stunDuration > 0) {
-            this.ctx.fillText(`- ${this.effects.diamond.stunDuration/1000}초 스턴`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.diamond.aoeSlow) {
-            this.ctx.fillText(`- 범위 감속 활성화`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.diamond.damageAmplify > 0) {
-            this.ctx.fillText(`- 데미지 증폭 ${this.effects.diamond.damageAmplify * 100}%`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.diamond.ultimateEndTime > now) {
-            this.ctx.fillText(`- 궁극기 발동중!`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-    }
-
-    // 클로버 효과
-    if (this.effects.clover.count > 0) {
-        this.ctx.fillStyle = "#66ff66";
-        this.ctx.fillText("♣ 클로버 효과:", cardAreaX, effectY);
-        effectY += 20;
-        if (this.effects.clover.ricochetChance > 0) {
-            this.ctx.fillText(`- 도탄 확률 ${this.effects.clover.ricochetChance * 100}%`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.clover.explosionEnabled) {
-            this.ctx.fillText("- 적 처치시 폭발", cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.clover.bounceCount > 0) {
-            this.ctx.fillText(`- ${this.effects.clover.bounceCount}번 바운스`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.clover.explosionSize > 1) {
-            this.ctx.fillText(`- 폭발 범위 ${this.effects.clover.explosionSize}배`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-        if (this.effects.clover.ultimateEndTime > now) {
-            this.ctx.fillText(`- 궁극기 발동중!`, cardAreaX + 10, effectY);
-            effectY += 20;
-        }
-    }
-
-    // 카드 심볼 그리기 전에 텍스트 정렬 중앙으로 변경
-    this.ctx.textAlign = "center";
-    // 수집된 카드 표시
-    this.collectedCards.forEach((card, index) => {
-      const cardX = cardAreaX + (index * 60);
-      this.drawCardSymbol(cardX, 80, card.type, 20, card.number);
-    });
-    
-    // 다시 왼쪽 정렬로 복구
-    this.ctx.textAlign = "left";
-
-    // 조준선
-    const lineLength = 50;
-    const dx = this.mouseX - this.player.x;
-    const dy = this.mouseY - this.player.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const normalizedDx = dx / distance;
-    const normalizedDy = dy / distance;
-
-    this.ctx.strokeStyle = "#0066ff";
-    this.ctx.lineWidth = 2;
-    this.ctx.beginPath();
-    this.ctx.moveTo(this.player.x, this.player.y);
-    this.ctx.lineTo(
-      this.player.x + normalizedDx * lineLength,
-      this.player.y + normalizedDy * lineLength
-    );
-    this.ctx.stroke();
-
-    // 플레이어 그리기
-    if (!this.player.invincible || Math.floor(now / 100) % 2) {
-      this.ctx.save();
-      this.ctx.translate(this.player.x, this.player.y);
-      const angle = Math.atan2(
-        this.mouseY - this.player.y,
-        this.mouseX - this.player.x
-      );
-      this.ctx.rotate(angle);
-      this.ctx.drawImage(
-        this.playerImage,
-        -this.player.size / 2,
-        -this.player.size / 2,
-        this.player.size,
-        this.player.size
-      );
-      this.ctx.restore();
-    }
-
-    // 총알 그리기
-    this.bullets.forEach((bullet) => {
-      this.ctx.fillStyle = bullet.color || "#ffff00";
-      this.ctx.beginPath();
-      this.ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
-      this.ctx.fill();
-      
-      if (bullet.isPiercing) {
-        this.ctx.strokeStyle = bullet.color;
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(bullet.x - bullet.speedX * 2, bullet.y - bullet.speedY * 2);
-        this.ctx.lineTo(bullet.x, bullet.y);
-        this.ctx.stroke();
-      }
-    });
-
-    // 적 그리기
-    this.enemies.forEach((enemy) => {
+      // 점수 표시 (왼쪽 상단 고정)
       this.ctx.fillStyle = "white";
-      this.ctx.fillRect(
-        enemy.x - enemy.size / 2,
-        enemy.y - enemy.size / 2,
-        enemy.size,
-        enemy.size
-      );
+      this.ctx.font = "24px Arial";
+      this.ctx.fillText(`점수: ${this.score}`, 20, 40);
 
-      const enemyHealthBarWidth = enemy.size;
-      const enemyHealthBarHeight = 4;
-      const enemyHealthBarY = enemy.y - enemy.size / 2 - 10;
+      // 라운드 정보 표시 (왼쪽 상단 고정)
+      this.ctx.fillText(`라운드: ${this.round}`, 20, 70);
+      
+      // 라운드 진행 상황 표시
+      const progressText = `처치: ${this.enemiesKilledInRound}/${this.enemiesRequiredForNextRound}`;
+      this.ctx.fillText(progressText, 20, 100);
+      
+      // 남은 시간 표시
+      const timeLeft = Math.max(0, Math.ceil((this.roundDuration - (now - this.roundStartTime)) / 1000));
+      this.ctx.fillText(`남은 시간: ${timeLeft}초`, 20, 130);
 
+      // 현재 무기 정보 표시
+      this.ctx.font = "20px Arial";
+      this.ctx.fillText(`무기: ${this.currentWeapon.name}`, 20, 160);
+      this.ctx.fillText(`공격력: ${this.currentWeapon.damage}`, 20, 190);
+
+      // 체력바
+      const healthBarWidth = 200;
+      const healthBarHeight = 20;
+      const healthBarX = 20;
+      const healthBarY = 210;
+
+      // 체력바 배경
       this.ctx.fillStyle = "#444444";
-      this.ctx.fillRect(
-        enemy.x - enemyHealthBarWidth / 2,
-        enemyHealthBarY,
-        enemyHealthBarWidth,
-        enemyHealthBarHeight
-      );
+      this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
 
-      const currentEnemyHealthWidth = (enemy.hp / 5) * enemyHealthBarWidth;
+      // 현재 체력
+      const currentHealthWidth = (this.player.hp / this.player.maxHp) * healthBarWidth;
       this.ctx.fillStyle = "#ff0000";
-      this.ctx.fillRect(
-        enemy.x - enemyHealthBarWidth / 2,
-        enemyHealthBarY,
-        currentEnemyHealthWidth,
-        enemyHealthBarHeight
-      );
-    });
+      this.ctx.fillRect(healthBarX, healthBarY, currentHealthWidth, healthBarHeight);
 
-    // 드롭된 카드 그리기
-    this.cards.forEach((card) => {
-      // 5초 이후부터 깜빡임 효과
-      if (now - card.createdAt > 5000) {
-        // 250ms 간격으로 깜빡임
-        if (Math.floor((now - card.createdAt) / 250) % 2 === 0) {
+      // 체력바 테두리
+      this.ctx.strokeStyle = "#ffffff";
+      this.ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+
+      // 카드 영역 배경 (오른쪽 상단 고정)
+      const cardAreaX = this.canvas.width - 320;
+      this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      this.ctx.fillRect(cardAreaX - 10, 10, 310, 180);
+      
+      // 버전 표시 (오른쪽 최상단)
+      this.ctx.fillStyle = "#ffffff";
+      this.ctx.font = "16px Arial";
+      this.ctx.textAlign = "right";
+      this.ctx.fillText("v.3", this.canvas.width - 10, 25);
+      this.ctx.textAlign = "left";
+      
+      // 카드 영역 제목
+      this.ctx.fillStyle = "white";
+      this.ctx.font = "18px Arial";
+      this.ctx.fillText("수집된 카드", cardAreaX, 35);
+      
+      // 현재 족보 표시
+      const currentHand = this.checkPokerHand();
+      this.ctx.fillStyle = "#ffff00";
+      this.ctx.font = "16px Arial";
+      this.ctx.fillText(`현재 족보: ${this.getPokerHandName(currentHand)}`, cardAreaX, 160);
+      
+      // 효과 표시 영역
+      this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      this.ctx.fillRect(cardAreaX - 10, 190, 310, 200);
+
+      // 각 무늬별 효과 표시
+      this.ctx.font = "14px Arial";
+      let effectY = 215;
+
+      // 스페이드 효과
+      if (this.effects.spade.count > 0) {
+          this.ctx.fillStyle = "#ffffff";
+          this.ctx.fillText("♠ 스페이드 효과:", cardAreaX, effectY);
+          effectY += 20;
+          if (this.effects.spade.damageIncrease > 0) {
+              this.ctx.fillText(`- 데미지 ${this.effects.spade.damageIncrease * 100}% 증가`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.spade.penetrationDamage > 0) {
+              this.ctx.fillText(`- 관통 데미지 ${this.effects.spade.penetrationDamage * 100}% 증가`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.spade.criticalChance > 0) {
+              this.ctx.fillText(`- 치명타 확률 ${this.effects.spade.criticalChance * 100}%`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.spade.aoeEnabled) {
+              this.ctx.fillText(`- 범위 데미지 활성화`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.spade.ultimateEndTime > now) {
+              this.ctx.fillText(`- 궁극기 발동중!`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+      }
+
+      // 하트 효과
+      if (this.effects.heart.count > 0) {
+          this.ctx.fillStyle = "#ff6666";
+          this.ctx.fillText("♥ 하트 효과:", cardAreaX, effectY);
+          effectY += 20;
+          if (this.effects.heart.lifeSteal > 0) {
+              this.ctx.fillText(`- 흡혈량 ${this.effects.heart.lifeSteal * 100}%`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.heart.convertChance > 0) {
+              this.ctx.fillText(`- 아군 전환 확률 ${this.effects.heart.convertChance * 100}%`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.heart.maxHpIncrease > 0) {
+              this.ctx.fillText(`- 최대 체력 ${this.effects.heart.maxHpIncrease * 100}% 증가`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.heart.allyPowerUp) {
+              this.ctx.fillText(`- 아군 공격력 50% 증가`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.heart.ultimateEndTime > now) {
+              this.ctx.fillText(`- 궁극기 발동중!`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+      }
+
+      // 다이아몬드 효과
+      if (this.effects.diamond.count > 0) {
+          this.ctx.fillStyle = "#ff66ff";
+          this.ctx.fillText("◆ 다이아몬드 효과:", cardAreaX, effectY);
+          effectY += 20;
+          if (this.effects.diamond.slowAmount > 0) {
+              this.ctx.fillText(`- 적 이동속도 ${this.effects.diamond.slowAmount * 100}% 감소`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.diamond.stunDuration > 0) {
+              this.ctx.fillText(`- ${this.effects.diamond.stunDuration/1000}초 스턴`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.diamond.aoeSlow) {
+              this.ctx.fillText(`- 범위 감속 활성화`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.diamond.damageAmplify > 0) {
+              this.ctx.fillText(`- 데미지 증폭 ${this.effects.diamond.damageAmplify * 100}%`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.diamond.ultimateEndTime > now) {
+              this.ctx.fillText(`- 궁극기 발동중!`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+      }
+
+      // 클로버 효과
+      if (this.effects.clover.count > 0) {
+          this.ctx.fillStyle = "#66ff66";
+          this.ctx.fillText("♣ 클로버 효과:", cardAreaX, effectY);
+          effectY += 20;
+          if (this.effects.clover.ricochetChance > 0) {
+              this.ctx.fillText(`- 도탄 확률 ${this.effects.clover.ricochetChance * 100}%`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.clover.explosionEnabled) {
+              this.ctx.fillText("- 적 처치시 폭발", cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.clover.bounceCount > 0) {
+              this.ctx.fillText(`- ${this.effects.clover.bounceCount}번 바운스`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.clover.explosionSize > 1) {
+              this.ctx.fillText(`- 폭발 범위 ${this.effects.clover.explosionSize}배`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+          if (this.effects.clover.ultimateEndTime > now) {
+              this.ctx.fillText(`- 궁극기 발동중!`, cardAreaX + 10, effectY);
+              effectY += 20;
+          }
+      }
+
+      // 카드 심볼 그리기 전에 텍스트 정렬 중앙으로 변경
+      this.ctx.textAlign = "center";
+      // 수집된 카드 표시
+      this.collectedCards.forEach((card, index) => {
+        const cardX = cardAreaX + (index * 60);
+        this.drawCardSymbol(cardX, 80, card.type, 20, card.number);
+      });
+      
+      // 다시 왼쪽 정렬로 복구
+      this.ctx.textAlign = "left";
+
+      // 조준선
+      const lineLength = 50;
+      const dx = this.mouseX - this.player.x;
+      const dy = this.mouseY - this.player.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const normalizedDx = dx / distance;
+      const normalizedDy = dy / distance;
+
+      this.ctx.strokeStyle = "#0066ff";
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.moveTo(this.player.x, this.player.y);
+      this.ctx.lineTo(
+        this.player.x + normalizedDx * lineLength,
+        this.player.y + normalizedDy * lineLength
+      );
+      this.ctx.stroke();
+
+      // 플레이어 그리기
+      if (!this.player.invincible || Math.floor(now / 100) % 2) {
+        this.ctx.save();
+        this.ctx.translate(this.player.x, this.player.y);
+        const angle = Math.atan2(
+          this.mouseY - this.player.y,
+          this.mouseX - this.player.x
+        );
+        this.ctx.rotate(angle);
+        this.ctx.drawImage(
+          this.playerImage,
+          -this.player.size / 2,
+          -this.player.size / 2,
+          this.player.size,
+          this.player.size
+        );
+        this.ctx.restore();
+      }
+
+      // 총알 그리기
+      this.bullets.forEach((bullet) => {
+        this.ctx.fillStyle = bullet.color || "#ffff00";
+        this.ctx.beginPath();
+        this.ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        if (bullet.isPiercing) {
+          this.ctx.strokeStyle = bullet.color;
+          this.ctx.lineWidth = 2;
+          this.ctx.beginPath();
+          this.ctx.moveTo(bullet.x - bullet.speedX * 2, bullet.y - bullet.speedY * 2);
+          this.ctx.lineTo(bullet.x, bullet.y);
+          this.ctx.stroke();
+        }
+      });
+
+      // 적 그리기
+      this.enemies.forEach((enemy) => {
+        this.ctx.fillStyle = "white";
+        this.ctx.fillRect(
+          enemy.x - enemy.size / 2,
+          enemy.y - enemy.size / 2,
+          enemy.size,
+          enemy.size
+        );
+
+        const enemyHealthBarWidth = enemy.size;
+        const enemyHealthBarHeight = 4;
+        const enemyHealthBarY = enemy.y - enemy.size / 2 - 10;
+
+        this.ctx.fillStyle = "#444444";
+        this.ctx.fillRect(
+          enemy.x - enemyHealthBarWidth / 2,
+          enemyHealthBarY,
+          enemyHealthBarWidth,
+          enemyHealthBarHeight
+        );
+
+        const currentEnemyHealthWidth = (enemy.hp / 5) * enemyHealthBarWidth;
+        this.ctx.fillStyle = "#ff0000";
+        this.ctx.fillRect(
+          enemy.x - enemyHealthBarWidth / 2,
+          enemyHealthBarY,
+          currentEnemyHealthWidth,
+          enemyHealthBarHeight
+        );
+      });
+
+      // 드롭된 카드 그리기
+      this.cards.forEach((card) => {
+        // 5초 이후부터 깜빡임 효과
+        if (now - card.createdAt > 5000) {
+          // 250ms 간격으로 깜빡임
+          if (Math.floor((now - card.createdAt) / 250) % 2 === 0) {
+            this.drawCardSymbol(card.x, card.y, card.type, card.size, card.number);
+          }
+        } else {
           this.drawCardSymbol(card.x, card.y, card.type, card.size, card.number);
         }
-      } else {
-        this.drawCardSymbol(card.x, card.y, card.type, card.size, card.number);
-      }
-    });
+      });
 
-    // 모바일 컨트롤
-    if (this.isMobile) {
-      if (this.joystick.active) {
-        this.ctx.strokeStyle = "#ffffff55";
-        this.ctx.lineWidth = 2;
+      // 모바일 컨트롤
+      if (this.isMobile) {
+        if (this.joystick.active) {
+          this.ctx.strokeStyle = "#ffffff55";
+          this.ctx.lineWidth = 2;
+          this.ctx.beginPath();
+          this.ctx.arc(
+            this.joystick.startX,
+            this.joystick.startY,
+            this.joystick.size,
+            0,
+            Math.PI * 2
+          );
+          this.ctx.stroke();
+
+          this.ctx.fillStyle = "#ffffff88";
+          this.ctx.beginPath();
+          this.ctx.arc(
+            this.joystick.moveX,
+            this.joystick.moveY,
+            this.joystick.size / 2,
+            0,
+            Math.PI * 2
+          );
+          this.ctx.fill();
+        }
+
+        this.ctx.fillStyle = "#ff000088";
         this.ctx.beginPath();
         this.ctx.arc(
-          this.joystick.startX,
-          this.joystick.startY,
-          this.joystick.size,
-          0,
-          Math.PI * 2
-        );
-        this.ctx.stroke();
-
-        this.ctx.fillStyle = "#ffffff88";
-        this.ctx.beginPath();
-        this.ctx.arc(
-          this.joystick.moveX,
-          this.joystick.moveY,
-          this.joystick.size / 2,
+          this.shootButton.x,
+          this.shootButton.y,
+          this.shootButton.size,
           0,
           Math.PI * 2
         );
         this.ctx.fill();
       }
 
-      this.ctx.fillStyle = "#ff000088";
-      this.ctx.beginPath();
-      this.ctx.arc(
-        this.shootButton.x,
-        this.shootButton.y,
-        this.shootButton.size,
-        0,
-        Math.PI * 2
-      );
-      this.ctx.fill();
+      // 라운드 전환 메시지
+      if (this.isRoundTransition) {
+        this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        this.ctx.fillStyle = "white";
+        this.ctx.font = "48px Arial";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText(`라운드 ${this.round} 클리어!`, this.canvas.width/2, this.canvas.height/2 - 50);
+        this.ctx.fillText(`다음 라운드 준비중...`, this.canvas.width/2, this.canvas.height/2 + 50);
+        this.ctx.textAlign = "left";
+      }
     }
 
-    // 라운드 전환 메시지
-    if (this.isRoundTransition) {
-      this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    // 디버그 메뉴 그리기
+    if (this.showDebugMenu) {
+      this.drawDebugMenu();
+    }
+
+    // 일시정지 메시지
+    if (this.isPaused && !this.showDebugMenu) {
+      this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
       this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       
       this.ctx.fillStyle = "white";
       this.ctx.font = "48px Arial";
       this.ctx.textAlign = "center";
-      this.ctx.fillText(`라운드 ${this.round} 클리어!`, this.canvas.width/2, this.canvas.height/2 - 50);
-      this.ctx.fillText(`다음 라운드 준비중...`, this.canvas.width/2, this.canvas.height/2 + 50);
-      this.ctx.textAlign = "left";
+      this.ctx.fillText("일시정지", this.canvas.width/2, this.canvas.height/2);
+      this.ctx.font = "24px Arial";
+      this.ctx.fillText("ESC를 눌러 재개", this.canvas.width/2, this.canvas.height/2 + 50);
     }
   }
 
@@ -1366,11 +1457,13 @@ class Game {
 
   gameLoop() {
     if (!this.isGameOver) {
-      this.movePlayer();
-      this.spawnEnemy();
-      this.updateEnemies();
-      this.updateBullets();
-      this.updateCards();
+      if (!this.isPaused) {
+        this.movePlayer();
+        this.spawnEnemy();
+        this.updateEnemies();
+        this.updateBullets();
+        this.updateCards();
+      }
       this.draw();
       this.gameLoopId = requestAnimationFrame(() => this.gameLoop());
     }
@@ -1502,6 +1595,97 @@ class Game {
     const hand = this.checkPokerHand();
     this.currentWeapon = this.weapons[hand];
     this.player.bulletDamage = this.currentWeapon.damage;
+  }
+
+  handleDebugMenuClick(x, y) {
+    // 카드 타입 선택 영역
+    const typeStartX = this.canvas.width/2 - 200;
+    const typeStartY = this.canvas.height/2 - 100;
+    
+    this.debugOptions.cardTypes.forEach((type, i) => {
+      const buttonX = typeStartX + (i * 100);
+      const buttonY = typeStartY;
+      
+      if (x > buttonX && x < buttonX + 80 && 
+          y > buttonY && y < buttonY + 30) {
+        this.debugOptions.selectedCard.type = type;
+      }
+    });
+
+    // 카드 숫자 선택 영역
+    const numberStartX = typeStartX;
+    const numberStartY = typeStartY + 50;
+    
+    this.debugOptions.cardNumbers.forEach((number, i) => {
+      const buttonX = numberStartX + ((i % 7) * 60);
+      const buttonY = numberStartY + (Math.floor(i / 7) * 40);
+      
+      if (x > buttonX && x < buttonX + 50 && 
+          y > buttonY && y < buttonY + 30) {
+        this.debugOptions.selectedCard.number = number;
+      }
+    });
+  }
+
+  drawDebugMenu() {
+    // 반투명 배경
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 제목
+    this.ctx.fillStyle = "white";
+    this.ctx.font = "32px Arial";
+    this.ctx.textAlign = "center";
+    this.ctx.fillText("디버그 메뉴", this.canvas.width/2, 100);
+    
+    // 현재 선택된 카드 정보
+    this.ctx.fillText(
+      `선택된 카드: ${this.debugOptions.selectedCard.type} ${this.debugOptions.selectedCard.number}`,
+      this.canvas.width/2,
+      150
+    );
+
+    // 카드 타입 선택 버튼
+    const typeStartX = this.canvas.width/2 - 200;
+    const typeStartY = this.canvas.height/2 - 100;
+    
+    this.debugOptions.cardTypes.forEach((type, i) => {
+      const buttonX = typeStartX + (i * 100);
+      const buttonY = typeStartY;
+      
+      // 버튼 배경
+      this.ctx.fillStyle = this.debugOptions.selectedCard.type === type ? "#444" : "#222";
+      this.ctx.fillRect(buttonX, buttonY, 80, 30);
+      
+      // 버튼 텍스트
+      this.ctx.fillStyle = "white";
+      this.ctx.font = "16px Arial";
+      this.ctx.fillText(type, buttonX + 40, buttonY + 20);
+    });
+
+    // 카드 숫자 선택 버튼
+    const numberStartX = typeStartX;
+    const numberStartY = typeStartY + 50;
+    
+    this.debugOptions.cardNumbers.forEach((number, i) => {
+      const buttonX = numberStartX + ((i % 7) * 60);
+      const buttonY = numberStartY + (Math.floor(i / 7) * 40);
+      
+      // 버튼 배경
+      this.ctx.fillStyle = this.debugOptions.selectedCard.number === number ? "#444" : "#222";
+      this.ctx.fillRect(buttonX, buttonY, 50, 30);
+      
+      // 버튼 텍스트
+      this.ctx.fillStyle = "white";
+      this.ctx.font = "16px Arial";
+      this.ctx.fillText(number, buttonX + 25, buttonY + 20);
+    });
+
+    // 안내 메시지
+    this.ctx.fillStyle = "white";
+    this.ctx.font = "20px Arial";
+    this.ctx.fillText("Enter를 눌러 카드 추가", this.canvas.width/2, this.canvas.height - 100);
+    this.ctx.fillText("ESC를 눌러 게임으로 돌아가기", this.canvas.width/2, this.canvas.height - 60);
   }
 }
 
