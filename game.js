@@ -139,10 +139,10 @@ class Game {
     Promise.all(imagePromises)
       .then(() => {
         console.log('게임 시작 준비 완료');
-        this.setupEventListeners();
-        this.setupMouseTracking();
-        this.setupMobileControls();
-        this.startGame();
+      this.setupEventListeners();
+      this.setupMouseTracking();
+      this.setupMobileControls();
+      this.startGame();
       });
 
     this.weapons = {
@@ -174,7 +174,8 @@ class Game {
     this.debugOptions = {
       selectedCard: { type: 'spade', number: 1 },
       cardTypes: ['spade', 'heart', 'diamond', 'clover'],
-      cardNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+      cardNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+      ricochetChance: 1.0  // 도탄 확률 추가 (기본값 100%)
     };
   }
 
@@ -391,6 +392,7 @@ class Game {
 
   createBullet(x, y, dx, dy, size, damage, isPiercing = false, color = "#ffff00") {
     const bullet = {
+      id: Date.now() + Math.random(), // 고유 ID 생성
       x,
       y,
       speedX: dx * this.player.bulletSpeed,
@@ -400,16 +402,18 @@ class Game {
       isRicochet: false,
       isPiercing,
       color,
-      bounceCount: 0  // 명시적으로 bounceCount 초기화
+      createdTime: Date.now(),
+      hitEnemies: [], // 충돌한 적 목록
+      lifeTime: 2000 // 도탄의 경우 2초 생존
     };
     
     console.log('총알 생성:', {
+      ID: bullet.id,
       위치: `(${x.toFixed(2)}, ${y.toFixed(2)})`,
       속도: `(${bullet.speedX.toFixed(2)}, ${bullet.speedY.toFixed(2)})`,
       크기: size,
       데미지: damage,
-      도탄여부: bullet.isRicochet,
-      바운스횟수: bullet.bounceCount
+      도탄여부: bullet.isRicochet
     });
     
     this.bullets.push(bullet);
@@ -461,82 +465,96 @@ class Game {
     const removeEnemies = [];
 
     this.enemies = this.enemies.filter((enemy) => {
-      if (enemy.isDead) {
-        this.enemiesKilledInRound++;
-        return false;
-      }
+        if (enemy.isDead) {
+            this.enemiesKilledInRound++;
+            return false;
+        }
 
-      // 스턴 상태 체크
-      if (enemy.stunEndTime && now < enemy.stunEndTime) {
-        return true;
-      }
+        // 스턴 상태 체크
+        if (enemy.stunEndTime && now < enemy.stunEndTime) {
+            return true;
+        }
 
-      // 아군 상태 체크
-      if (enemy.isAlly) {
-        // 가장 가까운 적 찾기
-        let nearestEnemy = null;
-        let minDistance = Infinity;
-        
-        this.enemies.forEach(otherEnemy => {
-          if (!otherEnemy.isDead && !otherEnemy.isAlly) {
-            const distance = this.getDistance(enemy, otherEnemy);
-            if (distance < minDistance) {
-              minDistance = distance;
-              nearestEnemy = otherEnemy;
+        // 아군 상태 체크
+        if (enemy.isAlly) {
+            // 가장 가까운 적 찾기
+            let nearestEnemy = null;
+            let minDistance = Infinity;
+            
+            this.enemies.forEach(otherEnemy => {
+                if (!otherEnemy.isDead && !otherEnemy.isAlly) {
+                    const distance = this.getDistance(enemy, otherEnemy);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestEnemy = otherEnemy;
+                    }
+                }
+            });
+
+            if (nearestEnemy) {
+                const dx = nearestEnemy.x - enemy.x;
+                const dy = nearestEnemy.y - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // 아군이 적을 향해 이동
+                enemy.x += (dx / distance) * enemy.speed;
+                enemy.y += (dy / distance) * enemy.speed;
+
+                // 공격 범위 내에 있으면 공격
+                if (distance < 100) {
+                    if (!enemy.lastAttackTime || now - enemy.lastAttackTime > 1000) {
+                        let damage = 1;
+                        if (this.effects.heart.count >= 4) {
+                            damage *= 1.5; // 아군 공격력 50% 증가
+                        }
+                        nearestEnemy.hp -= damage;
+                        enemy.lastAttackTime = now;
+
+                        if (nearestEnemy.hp <= 0) {
+                            nearestEnemy.isDead = true;
+                            this.score += 5;
+                            
+                            // 하트 5개 궁극기 상태에서는 처치한 적을 아군으로 전환
+                            if (this.effects.heart.count >= 5 && 
+                                this.effects.heart.ultimateEndTime > now) {
+                                nearestEnemy.isAlly = true;
+                                nearestEnemy.isDead = false;
+                                nearestEnemy.hp = 5 * (this.effects.heart.count >= 4 ? 1.5 : 1);
+                            }
+                        }
+                    }
+                }
             }
-          }
-        });
+            return true;
+        }
 
-        if (nearestEnemy) {
-          const dx = nearestEnemy.x - enemy.x;
-          const dy = nearestEnemy.y - enemy.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          // 아군이 적을 향해 이동
-          enemy.x += (dx / distance) * enemy.speed;
-          enemy.y += (dy / distance) * enemy.speed;
+        const dx = this.player.x - enemy.x;
+        const dy = this.player.y - enemy.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-          // 공격 범위 내에 있으면 공격
-          if (distance < 100) {
-            if (!enemy.lastAttackTime || now - enemy.lastAttackTime > 1000) {
-              let damage = 1;
-              if (this.effects.heart.allyPowerUp) {
-                damage *= 1.5;
-              }
-              nearestEnemy.hp -= damage;
-              enemy.lastAttackTime = now;
+        // 다이아몬드 5개 궁극기 상태에서는 적이 움직이지 않음
+        if (this.effects.diamond.count >= 5 && 
+            this.effects.diamond.ultimateEndTime > now) {
+            return true;
+        }
 
-              if (nearestEnemy.hp <= 0) {
-                nearestEnemy.isDead = true;
-                this.score += 5;
-              }
+        enemy.x += (dx / distance) * enemy.speed;
+        enemy.y += (dy / distance) * enemy.speed;
+
+        if (!this.player.invincible && this.checkCollision(this.player, enemy)) {
+            this.player.hp -= 1;
+            this.player.invincible = true;
+
+            setTimeout(() => {
+                this.player.invincible = false;
+            }, this.player.invincibleTime);
+
+            if (this.player.hp <= 0) {
+                this.gameOver();
             }
-          }
+            return false;
         }
         return true;
-      }
-
-      const dx = this.player.x - enemy.x;
-      const dy = this.player.y - enemy.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      enemy.x += (dx / distance) * enemy.speed;
-      enemy.y += (dy / distance) * enemy.speed;
-
-      if (!this.player.invincible && this.checkCollision(this.player, enemy)) {
-        this.player.hp -= 1;
-        this.player.invincible = true;
-
-        setTimeout(() => {
-          this.player.invincible = false;
-        }, this.player.invincibleTime);
-
-        if (this.player.hp <= 0) {
-          this.gameOver();
-        }
-        return false;
-      }
-      return true;
     });
 
     // 라운드 진행 상태 체크
@@ -652,197 +670,252 @@ class Game {
 
     const now = Date.now();
     if (now - this.player.lastShot > this.player.shotInterval) {
-      this.shoot();
-      this.player.lastShot = now;
+        this.shoot();
+        this.player.lastShot = now;
     }
 
     this.bullets = this.bullets.filter((bullet) => {
-      bullet.x += bullet.speedX;
-      bullet.y += bullet.speedY;
-
-      // 화면 밖으로 나가면 제거
-      if (bullet.x < 0 || bullet.x > this.canvas.width || bullet.y < 0 || bullet.y > this.canvas.height) {
-        return false;
-      }
-
-      let hitEnemy = false;
-      this.enemies.forEach((enemy) => {
-        if (!enemy.isDead && this.checkCollision(bullet, enemy)) {
-          // 스페이드 효과: 데미지 증가
-          let finalDamage = bullet.damage;
-          if (this.effects.spade.damageIncrease > 0) {
-            finalDamage *= (1 + this.effects.spade.damageIncrease);
-          }
-
-          // 스페이드 효과: 치명타
-          if (this.effects.spade.criticalChance > 0 && Math.random() < this.effects.spade.criticalChance) {
-            finalDamage *= 2;
-          }
-
-          // 스페이드 효과: 관통 데미지 증가
-          if (bullet.isPiercing && this.effects.spade.penetrationDamage > 0) {
-            finalDamage *= (1 + this.effects.spade.penetrationDamage);
-          }
-
-          // 다이아몬드 효과: 데미지 증폭
-          if (this.effects.diamond.damageAmplify > 0) {
-            finalDamage *= (1 + this.effects.diamond.damageAmplify);
-          }
-
-          enemy.hp -= finalDamage;
-
-          // 다이아몬드 효과: 감속
-          if (this.effects.diamond.slowAmount > 0) {
-            enemy.speed *= (1 - this.effects.diamond.slowAmount);
-          }
-
-          // 다이아몬드 효과: 스턴
-          if (this.effects.diamond.stunDuration > 0) {
-            enemy.stunEndTime = now + this.effects.diamond.stunDuration;
-          }
-
-          // 하트 효과: 흡혈
-          if (this.effects.heart.lifeSteal > 0) {
-            this.player.hp = Math.min(this.player.maxHp, 
-              this.player.hp + finalDamage * this.effects.heart.lifeSteal);
-          }
-
-          // 클로버 효과: 도탄
-          if (this.effects.clover.ricochetChance > 0 && 
-              Math.random() < this.effects.clover.ricochetChance) {
-            this.handleRicochet(bullet, enemy);
-          }
-
-          if (enemy.hp <= 0) {
-            enemy.isDead = true;
-            this.score += 10;
-
-            // 하트 효과: 아군 전환
-            if (this.effects.heart.convertChance > 0 && 
-                Math.random() < this.effects.heart.convertChance) {
-              enemy.isDead = false;
-              enemy.isAlly = true;
-              enemy.hp = 5;
+        // 화면 밖으로 나가면 제거 또는 바운스
+        if (bullet.x < 0 || bullet.x > this.canvas.width || 
+            bullet.y < 0 || bullet.y > this.canvas.height) {
+            if (bullet.isRicochet && this.effects.clover.count >= 3 && 
+                bullet.bounceCount < 5) {
+                // 바운스 처리
+                if (bullet.x < 0 || bullet.x > this.canvas.width) bullet.speedX *= -1;
+                if (bullet.y < 0 || bullet.y > this.canvas.height) bullet.speedY *= -1;
+                bullet.bounceCount++;
+                return true;
             }
-
-            // 클로버 효과: 폭발
-            if (this.effects.clover.explosionEnabled) {
-              const explosionRadius = 30 * this.effects.clover.explosionSize;
-              const explosionDamage = bullet.damage * 0.5;
-              
-              // 주변 적들에게 폭발 데미지
-              this.enemies.forEach(nearbyEnemy => {
-                if (!nearbyEnemy.isDead && nearbyEnemy !== enemy) {
-                  const distance = this.getDistance(enemy, nearbyEnemy);
-                  if (distance < explosionRadius) {
-                    const damageMultiplier = 1 - (distance / explosionRadius);
-                    const explosionFinalDamage = explosionDamage * damageMultiplier;
-                    nearbyEnemy.hp -= explosionFinalDamage;
-                    
-                    if (nearbyEnemy.hp <= 0) {
-                      nearbyEnemy.isDead = true;
-                      this.score += 5;
-                    }
-                  }
-                }
-              });
-            }
-
-            this.spawnCard(enemy.x, enemy.y);
-          }
-
-          if (!bullet.isPiercing) {
-            hitEnemy = true;
-          }
+            return false;
         }
-      });
 
-      return !hitEnemy;
+        // 도탄 시간 체크
+        if (bullet.isRicochet && now - bullet.createdTime > 2000) {
+            return false;
+        }
+
+        // 총알 이동
+        bullet.x += bullet.speedX;
+        bullet.y += bullet.speedY;
+
+        let hasHit = false;
+        this.enemies.forEach((enemy) => {
+            if (!enemy.isDead && !bullet.hitEnemies.includes(enemy.id) && 
+                this.checkCollision(bullet, enemy)) {
+                
+                // 데미지 계산
+                let finalDamage = bullet.damage;
+
+                // 스페이드 효과 적용
+                if (this.effects.spade.count >= 1) {
+                    finalDamage *= 1.25; // 데미지 25% 증가
+                }
+                if (this.effects.spade.count >= 2 && bullet.isPiercing) {
+                    finalDamage *= 1.15; // 관통 시 데미지 15% 추가 증가
+                }
+                if (this.effects.spade.count >= 3 && Math.random() < 0.3) {
+                    finalDamage *= 2; // 30% 확률로 치명타
+                    console.log('치명타!', finalDamage);
+                }
+
+                // 다이아몬드 효과 적용
+                if (this.effects.diamond.count >= 1) {
+                    enemy.speed *= 0.7; // 30% 감속
+                }
+                if (this.effects.diamond.count >= 2) {
+                    enemy.stunEndTime = now + 1000; // 1초 스턴
+                }
+                if (this.effects.diamond.count >= 4) {
+                    finalDamage *= 1.3; // 데미지 30% 증가
+                }
+
+                // 데미지 적용
+                enemy.hp -= finalDamage;
+                bullet.hitEnemies.push(enemy.id);
+
+                // 하트 효과 적용 (흡혈)
+                if (this.effects.heart.count >= 1) {
+                    const healAmount = finalDamage * 0.1; // 데미지의 10% 흡혈
+                    this.player.hp = Math.min(this.player.maxHp, this.player.hp + healAmount);
+                }
+
+                // 적 처치 시 효과
+                if (enemy.hp <= 0) {
+                    // 하트 효과 (아군 전환)
+                    if (this.effects.heart.count >= 2 && Math.random() < 0.25) {
+                        enemy.isAlly = true;
+                        enemy.isDead = false;
+                        enemy.hp = 5;
+                        if (this.effects.heart.count >= 4) {
+                            enemy.hp *= 1.5; // 아군 체력 50% 증가
+                        }
+                    } else {
+                        enemy.isDead = true;
+                        this.score += 10;
+                        this.spawnCard(enemy.x, enemy.y);
+
+                        // 클로버 효과 (폭발)
+                        if (this.effects.clover.count >= 2) {
+                            const radius = this.effects.clover.count >= 4 ? 100 : 50;
+                            this.createExplosion(enemy.x, enemy.y, radius, finalDamage * 0.5);
+                        }
+                    }
+                }
+
+                // 다이아몬드 범위 감속
+                if (this.effects.diamond.count >= 3) {
+                    this.enemies.forEach(nearbyEnemy => {
+                        if (!nearbyEnemy.isDead && !nearbyEnemy.isAlly && 
+                            this.getDistance(enemy, nearbyEnemy) < 150) {
+                            nearbyEnemy.speed *= 0.7;
+                        }
+                    });
+                }
+
+                // 도탄 효과 - 적에게 맞으면 초록색 도탄으로 변경
+                if (!bullet.isRicochet && this.effects.clover.count >= 1 && Math.random() < this.effects.clover.ricochetChance) {
+                    bullet.isRicochet = true;
+                    bullet.color = "#00ff00";
+                    bullet.damage *= 0.6; // 도탄 데미지는 60%로 감소
+                    
+                    // 도탄의 방향을 랜덤하게 변경
+                    const randomAngle = Math.random() * Math.PI * 2;
+                    bullet.speedX = Math.cos(randomAngle) * this.player.bulletSpeed;
+                    bullet.speedY = Math.sin(randomAngle) * this.player.bulletSpeed;
+                    
+                    console.log('도탄 발생:', {
+                        위치: `(${enemy.x}, ${enemy.y})`,
+                        각도: `${(randomAngle * 180 / Math.PI).toFixed(2)}도`,
+                        데미지: bullet.damage
+                    });
+                    
+                    hasHit = false; // 도탄은 계속 진행
+                } else {
+                    hasHit = !bullet.isPiercing; // 관통 총알이 아닌 경우에만 사라짐
+                }
+            }
+        });
+
+        return !hasHit;
     });
-  }
+}
 
   handleRicochet(originalBullet, hitEnemy) {
-    console.log('도탄 시도:', {
-      클로버개수: this.effects.clover.count,
-      도탄확률: this.effects.clover.ricochetChance,
-      현재바운스: originalBullet.bounceCount,
-      최대바운스: this.effects.clover.bounceCount
+    console.log('도탄 발생:', {
+      위치: `(${hitEnemy.x}, ${hitEnemy.y})`
     });
 
-    const maxBounces = this.effects.clover.bounceCount + 1;
-    if (originalBullet.bounceCount >= maxBounces) {
-      console.log('최대 바운스 도달');
-      return;
-    }
+    // 주변 300 범위 내의 다른 적 찾기
+    const nearbyEnemies = this.enemies.filter(enemy => {
+      if (enemy === hitEnemy || enemy.isDead || enemy.isAlly) return false;
+      const distance = this.getDistance(hitEnemy, enemy);
+      return distance <= 300;
+    });
 
-    const nearbyEnemies = this.enemies.filter(e => 
-      !e.isDead && 
-      e !== hitEnemy && 
-      this.getDistance(hitEnemy, e) < 150
-    );
-
-    console.log('주변 적 발견:', nearbyEnemies.length);
+    // 도탄 설정
+    const ricochetSpeed = this.player.bulletSpeed * 0.8;
+    const ricochetDamage = originalBullet.damage * 0.6;
+    const ricochetSize = originalBullet.size * 0.7;
 
     if (nearbyEnemies.length > 0) {
-      const targets = nearbyEnemies
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 3);
-
-      targets.forEach(target => {
-        const angle = Math.atan2(
-          target.y - hitEnemy.y,
-          target.x - hitEnemy.x
-        );
-        
-        // 속도 계산 수정
-        const speed = this.player.bulletSpeed * 0.8;
-        const newBullet = {
-          x: hitEnemy.x,
-          y: hitEnemy.y,
-          speedX: Math.cos(angle) * speed,
-          speedY: Math.sin(angle) * speed,
-          size: originalBullet.size * 0.7,
-          damage: originalBullet.damage * 0.6,
-          isRicochet: true,
-          isPiercing: false,
-          color: "#00ff00",
-          bounceCount: (originalBullet.bounceCount || 0) + 1
-        };
-        
-        this.bullets.push(newBullet);
-        
-        console.log('도탄 총알 생성 완료:', {
-          시작위치: `(${newBullet.x.toFixed(2)}, ${newBullet.y.toFixed(2)})`,
-          목표위치: `(${target.x.toFixed(2)}, ${target.y.toFixed(2)})`,
-          각도: (angle * 180 / Math.PI).toFixed(2) + '도',
-          속도: `(${newBullet.speedX.toFixed(2)}, ${newBullet.speedY.toFixed(2)})`,
-          크기: newBullet.size.toFixed(2),
-          데미지: newBullet.damage.toFixed(2),
-          바운스횟수: newBullet.bounceCount
-        });
-      });
+      // 가장 가까운 적을 향해 발사
+      const target = nearbyEnemies[0];
+      const dx = target.x - hitEnemy.x;
+      const dy = target.y - hitEnemy.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      this.createBullet(
+        hitEnemy.x,
+        hitEnemy.y,
+        dx / distance,
+        dy / distance,
+        ricochetSize,
+        ricochetDamage,
+        false,
+        "#00ff00"
+      );
+    } else {
+      // 랜덤한 방향으로 발사
+      const randomAngle = Math.random() * Math.PI * 2;
+      this.createBullet(
+        hitEnemy.x,
+        hitEnemy.y,
+        Math.cos(randomAngle),
+        Math.sin(randomAngle),
+        ricochetSize,
+        ricochetDamage,
+        false,
+        "#00ff00"
+      );
     }
+  }
+
+  createRicochetBullet(hitEnemy, target, originalBullet) {
+    const angle = Math.atan2(
+      target.y - hitEnemy.y,
+      target.x - hitEnemy.x
+    );
+    
+    const speed = this.player.bulletSpeed * 0.8;
+    const newBullet = {
+      x: hitEnemy.x,
+      y: hitEnemy.y,
+      speedX: Math.cos(angle) * speed,
+      speedY: Math.sin(angle) * speed,
+      size: originalBullet.size * 0.7,
+      damage: originalBullet.damage * 0.6,
+      isRicochet: true,
+      isPiercing: false,
+      color: "#00ff00",
+      bounceCount: (originalBullet.bounceCount || 0) + 1
+    };
+    
+    this.bullets.push(newBullet);
+    
+    console.log('도탄 총알 생성:', {
+      시작위치: `(${newBullet.x.toFixed(2)}, ${newBullet.y.toFixed(2)})`,
+      목표위치: `(${target.x.toFixed(2)}, ${target.y.toFixed(2)})`,
+      각도: (angle * 180 / Math.PI).toFixed(2) + '도',
+      속도: `(${newBullet.speedX.toFixed(2)}, ${newBullet.speedY.toFixed(2)})`,
+      크기: newBullet.size.toFixed(2),
+      데미지: newBullet.damage.toFixed(2),
+      바운스횟수: newBullet.bounceCount
+    });
   }
 
   createExplosion(x, y, radius, damage) {
     this.enemies.forEach(enemy => {
-      if (!enemy.isDead) {
-        const distance = this.getDistance({x, y}, enemy);
-        if (distance < radius) {
-          const damageMultiplier = 1 - (distance / radius);
-          enemy.hp -= damage * damageMultiplier;
-          
-          if (enemy.hp <= 0) {
-            enemy.isDead = true;
-            this.score += 10;
-            
-            // 2차 폭발 (클로버 4개 이상 효과)
-            if (this.effects.clover.explosionSize > 1) {
-              this.createExplosion(enemy.x, enemy.y, radius * 0.5, damage * 0.5);
+        if (!enemy.isDead && !enemy.isAlly) {
+            const distance = this.getDistance({x, y}, enemy);
+            if (distance < radius) {
+                const damageMultiplier = 1 - (distance / radius);
+                const explosionDamage = damage * damageMultiplier;
+                
+                enemy.hp -= explosionDamage;
+
+                // 다이아몬드 범위 감속 효과
+                if (this.effects.diamond.count >= 3) {
+                    enemy.speed *= 0.7;
+                }
+
+                if (enemy.hp <= 0) {
+                    enemy.isDead = true;
+                    this.score += 10;
+                    
+                    // 클로버 2차 폭발 (4개 이상 보유 시)
+                    if (this.effects.clover.count >= 4) {
+                        this.createExplosion(enemy.x, enemy.y, radius * 0.5, damage * 0.5);
+                    }
+
+                    // 하트 아군 전환 효과
+                    if (this.effects.heart.count >= 2 && Math.random() < 0.25) {
+                        enemy.isAlly = true;
+                        enemy.isDead = false;
+                        enemy.hp = 5 * (this.effects.heart.count >= 4 ? 1.5 : 1);
+                    }
+                }
             }
-          }
         }
-      }
     });
   }
 
@@ -1157,7 +1230,7 @@ class Game {
     if (this.isGameOver) return;
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    
+
     // 일반 게임 요소 그리기
     if (!this.showDebugMenu) {
       const now = Date.now();
@@ -1191,22 +1264,22 @@ class Game {
       this.ctx.fillText(`공격력: ${this.currentWeapon.damage}`, 20, 190);
 
       // 체력바
-      const healthBarWidth = 200;
-      const healthBarHeight = 20;
+    const healthBarWidth = 200;
+    const healthBarHeight = 20;
       const healthBarX = 20;
       const healthBarY = 210;
 
       // 체력바 배경
-      this.ctx.fillStyle = "#444444";
-      this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+    this.ctx.fillStyle = "#444444";
+    this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
 
       // 현재 체력
       const currentHealthWidth = (this.player.hp / this.player.maxHp) * healthBarWidth;
-      this.ctx.fillStyle = "#ff0000";
+    this.ctx.fillStyle = "#ff0000";
       this.ctx.fillRect(healthBarX, healthBarY, currentHealthWidth, healthBarHeight);
 
       // 체력바 테두리
-      this.ctx.strokeStyle = "#ffffff";
+    this.ctx.strokeStyle = "#ffffff";
       this.ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
 
       // 카드 영역 배경 (오른쪽 상단 고정)
@@ -1218,7 +1291,7 @@ class Game {
       this.ctx.fillStyle = "#ffffff";
       this.ctx.font = "16px Arial";
       this.ctx.textAlign = "right";
-      this.ctx.fillText("v.3_1", this.canvas.width - 10, 25);
+      this.ctx.fillText("v.3_2", this.canvas.width - 10, 25);
       this.ctx.textAlign = "left";
       
       // 카드 영역 제목
@@ -1360,48 +1433,48 @@ class Game {
       this.ctx.textAlign = "left";
 
       // 조준선
-      const lineLength = 50;
-      const dx = this.mouseX - this.player.x;
-      const dy = this.mouseY - this.player.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      const normalizedDx = dx / distance;
-      const normalizedDy = dy / distance;
+    const lineLength = 50;
+    const dx = this.mouseX - this.player.x;
+    const dy = this.mouseY - this.player.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const normalizedDx = dx / distance;
+    const normalizedDy = dy / distance;
 
-      this.ctx.strokeStyle = "#0066ff";
-      this.ctx.lineWidth = 2;
-      this.ctx.beginPath();
-      this.ctx.moveTo(this.player.x, this.player.y);
-      this.ctx.lineTo(
-        this.player.x + normalizedDx * lineLength,
-        this.player.y + normalizedDy * lineLength
-      );
-      this.ctx.stroke();
+    this.ctx.strokeStyle = "#0066ff";
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    this.ctx.moveTo(this.player.x, this.player.y);
+    this.ctx.lineTo(
+      this.player.x + normalizedDx * lineLength,
+      this.player.y + normalizedDy * lineLength
+    );
+    this.ctx.stroke();
 
       // 플레이어 그리기
       if (!this.player.invincible || Math.floor(now / 100) % 2) {
         this.ctx.save();
-        this.ctx.translate(this.player.x, this.player.y);
-        const angle = Math.atan2(
-          this.mouseY - this.player.y,
-          this.mouseX - this.player.x
-        );
-        this.ctx.rotate(angle);
-        this.ctx.drawImage(
-          this.playerImage,
-          -this.player.size / 2,
-          -this.player.size / 2,
-          this.player.size,
-          this.player.size
-        );
+      this.ctx.translate(this.player.x, this.player.y);
+      const angle = Math.atan2(
+        this.mouseY - this.player.y,
+        this.mouseX - this.player.x
+      );
+      this.ctx.rotate(angle);
+      this.ctx.drawImage(
+        this.playerImage,
+        -this.player.size / 2,
+        -this.player.size / 2,
+        this.player.size,
+        this.player.size
+      );
         this.ctx.restore();
-      }
+    }
 
       // 총알 그리기
-      this.bullets.forEach((bullet) => {
+    this.bullets.forEach((bullet) => {
         this.ctx.fillStyle = bullet.color || "#ffff00";
-        this.ctx.beginPath();
-        this.ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
-        this.ctx.fill();
+      this.ctx.beginPath();
+      this.ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
+      this.ctx.fill();
         
         if (bullet.isPiercing) {
           this.ctx.strokeStyle = bullet.color;
@@ -1414,21 +1487,21 @@ class Game {
       });
 
       // 적 그리기
-      this.enemies.forEach((enemy) => {
-        this.ctx.fillStyle = "white";
-        this.ctx.fillRect(
-          enemy.x - enemy.size / 2,
-          enemy.y - enemy.size / 2,
-          enemy.size,
-          enemy.size
-        );
+    this.enemies.forEach((enemy) => {
+      this.ctx.fillStyle = "white";
+      this.ctx.fillRect(
+        enemy.x - enemy.size / 2,
+        enemy.y - enemy.size / 2,
+        enemy.size,
+        enemy.size
+      );
 
         const enemyHealthBarWidth = enemy.size;
         const enemyHealthBarHeight = 4;
         const enemyHealthBarY = enemy.y - enemy.size / 2 - 10;
 
-        this.ctx.fillStyle = "#444444";
-        this.ctx.fillRect(
+      this.ctx.fillStyle = "#444444";
+      this.ctx.fillRect(
           enemy.x - enemyHealthBarWidth / 2,
           enemyHealthBarY,
           enemyHealthBarWidth,
@@ -1436,22 +1509,22 @@ class Game {
         );
 
         const currentEnemyHealthWidth = (enemy.hp / 5) * enemyHealthBarWidth;
-        this.ctx.fillStyle = "#ff0000";
-        this.ctx.fillRect(
+      this.ctx.fillStyle = "#ff0000";
+      this.ctx.fillRect(
           enemy.x - enemyHealthBarWidth / 2,
           enemyHealthBarY,
           currentEnemyHealthWidth,
           enemyHealthBarHeight
-        );
-      });
+      );
+    });
 
       // 드롭된 카드 그리기
-      this.cards.forEach((card) => {
+    this.cards.forEach((card) => {
         // 5초 이후부터 깜빡임 효과
         if (now - card.createdAt > 5000) {
           // 250ms 간격으로 깜빡임
           if (Math.floor((now - card.createdAt) / 250) % 2 === 0) {
-            this.drawCardSymbol(card.x, card.y, card.type, card.size, card.number);
+      this.drawCardSymbol(card.x, card.y, card.type, card.size, card.number);
           }
         } else {
           this.drawCardSymbol(card.x, card.y, card.type, card.size, card.number);
@@ -1459,42 +1532,42 @@ class Game {
       });
 
       // 모바일 컨트롤
-      if (this.isMobile) {
-        if (this.joystick.active) {
-          this.ctx.strokeStyle = "#ffffff55";
-          this.ctx.lineWidth = 2;
-          this.ctx.beginPath();
-          this.ctx.arc(
-            this.joystick.startX,
-            this.joystick.startY,
-            this.joystick.size,
-            0,
-            Math.PI * 2
-          );
-          this.ctx.stroke();
-
-          this.ctx.fillStyle = "#ffffff88";
-          this.ctx.beginPath();
-          this.ctx.arc(
-            this.joystick.moveX,
-            this.joystick.moveY,
-            this.joystick.size / 2,
-            0,
-            Math.PI * 2
-          );
-          this.ctx.fill();
-        }
-
-        this.ctx.fillStyle = "#ff000088";
+    if (this.isMobile) {
+      if (this.joystick.active) {
+        this.ctx.strokeStyle = "#ffffff55";
+        this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         this.ctx.arc(
-          this.shootButton.x,
-          this.shootButton.y,
-          this.shootButton.size,
+          this.joystick.startX,
+          this.joystick.startY,
+          this.joystick.size,
+          0,
+          Math.PI * 2
+        );
+        this.ctx.stroke();
+
+        this.ctx.fillStyle = "#ffffff88";
+        this.ctx.beginPath();
+        this.ctx.arc(
+          this.joystick.moveX,
+          this.joystick.moveY,
+          this.joystick.size / 2,
           0,
           Math.PI * 2
         );
         this.ctx.fill();
+      }
+
+      this.ctx.fillStyle = "#ff000088";
+      this.ctx.beginPath();
+      this.ctx.arc(
+        this.shootButton.x,
+        this.shootButton.y,
+        this.shootButton.size,
+        0,
+        Math.PI * 2
+      );
+      this.ctx.fill();
       }
 
       // 라운드 전환 메시지
@@ -1559,11 +1632,11 @@ class Game {
   gameLoop() {
     if (!this.isGameOver) {
       if (!this.isPaused) {
-        this.movePlayer();
-        this.spawnEnemy();
-        this.updateEnemies();
-        this.updateBullets();
-        this.updateCards();
+      this.movePlayer();
+      this.spawnEnemy();
+      this.updateEnemies();
+      this.updateBullets();
+      this.updateCards();
       }
       this.draw();
       this.gameLoopId = requestAnimationFrame(() => this.gameLoop());
@@ -1703,6 +1776,29 @@ class Game {
     const typeStartX = this.canvas.width/2 - 200;
     const typeStartY = this.canvas.height/2 - 100;
     
+    // 도탄 확률 조절 버튼
+    const ricochetX = this.canvas.width/2 - 150;
+    const ricochetY = this.canvas.height/2 + 150;
+    
+    // 확률 감소 버튼
+    if (x > ricochetX && x < ricochetX + 50 && 
+        y > ricochetY && y < ricochetY + 30) {
+      const newChance = Math.max(0, this.debugOptions.ricochetChance - 0.1);
+      this.debugOptions.ricochetChance = newChance;
+      this.effects.clover.ricochetChance = newChance;
+      console.log('도탄 확률 변경:', newChance);
+    }
+    
+    // 확률 증가 버튼
+    if (x > ricochetX + 150 && x < ricochetX + 200 && 
+        y > ricochetY && y < ricochetY + 30) {
+      const newChance = Math.min(1, this.debugOptions.ricochetChance + 0.1);
+      this.debugOptions.ricochetChance = newChance;
+      this.effects.clover.ricochetChance = newChance;
+      console.log('도탄 확률 변경:', newChance);
+    }
+
+    // 기존 카드 선택 로직
     this.debugOptions.cardTypes.forEach((type, i) => {
       const buttonX = typeStartX + (i * 100);
       const buttonY = typeStartY;
@@ -1781,6 +1877,35 @@ class Game {
       this.ctx.font = "16px Arial";
       this.ctx.fillText(number, buttonX + 25, buttonY + 20);
     });
+
+    // 도탄 확률 조절 UI
+    const ricochetX = this.canvas.width/2 - 150;
+    const ricochetY = this.canvas.height/2 + 150;
+    
+    // 제목
+    this.ctx.fillStyle = "white";
+    this.ctx.font = "20px Arial";
+    this.ctx.fillText("도탄 확률 조절", this.canvas.width/2, ricochetY - 20);
+    
+    // 감소 버튼
+    this.ctx.fillStyle = "#222";
+    this.ctx.fillRect(ricochetX, ricochetY, 50, 30);
+    this.ctx.fillStyle = "white";
+    this.ctx.fillText("-", ricochetX + 25, ricochetY + 20);
+    
+    // 현재 확률 표시
+    this.ctx.fillStyle = "white";
+    this.ctx.fillText(
+      `${Math.round(this.debugOptions.ricochetChance * 100)}%`,
+      ricochetX + 100,
+      ricochetY + 20
+    );
+    
+    // 증가 버튼
+    this.ctx.fillStyle = "#222";
+    this.ctx.fillRect(ricochetX + 150, ricochetY, 50, 30);
+    this.ctx.fillStyle = "white";
+    this.ctx.fillText("+", ricochetX + 175, ricochetY + 20);
 
     // 안내 메시지
     this.ctx.fillStyle = "white";
