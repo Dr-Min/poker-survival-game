@@ -97,31 +97,52 @@ class Game {
     // 이미지 로딩 프로미스 배열
     const imagePromises = [];
 
+    // 카드 번호를 파일 번호로 변환하는 함수
+    const getFileNumber = (type, number) => {
+      const baseOffset = {
+        'heart': 0,
+        'diamond': 13,
+        'spade': 26,
+        'clover': 39
+      }[type];
+      
+      // 숫자 카드의 경우 순서 변환 (A,K,Q,J,2,3,4,5,6,7,8,9,10)
+      let fileIndex;
+      if (number === 1) fileIndex = 1; // A
+      else if (number === 13) fileIndex = 2; // K
+      else if (number === 12) fileIndex = 3; // Q
+      else if (number === 11) fileIndex = 4; // J
+      else fileIndex = number + 3; // 2~10
+
+      return String(baseOffset + fileIndex).padStart(2, '0');
+    };
+
     // 각 무늬와 숫자에 대한 이미지 로드
     ['spade', 'heart', 'diamond', 'clover'].forEach(type => {
       for (let i = 1; i <= 13; i++) {
         const img = new Image();
-        const promise = new Promise((resolve, reject) => {
+        const promise = new Promise((resolve) => {
           img.onload = () => resolve();
-          img.onerror = () => reject();
+          img.onerror = () => {
+            console.log(`이미지 로드 실패: ${type} ${i}`);
+            resolve();
+          };
         });
-        img.src = `V2_4x/${type}/${i}.png`;
+        const fileNumber = getFileNumber(type, i);
+        img.src = `V2_4x/PixelPlebes_V2_4x__${fileNumber}.png`;
         this.cardImages[type][i] = img;
         imagePromises.push(promise);
       }
     });
 
-    // 모든 이미지가 로드되면 게임 시작
+    // 모든 이미지 로드 시도 후 게임 시작
     Promise.all(imagePromises)
       .then(() => {
-        console.log('모든 카드 이미지 로드 완료');
+        console.log('게임 시작 준비 완료');
         this.setupEventListeners();
         this.setupMouseTracking();
         this.setupMobileControls();
         this.startGame();
-      })
-      .catch(error => {
-        console.error('카드 이미지 로드 실패:', error);
       });
 
     this.weapons = {
@@ -849,13 +870,19 @@ class Game {
       // 이미지로 카드 그리기
       const img = this.cardImages[type][number];
       if (img) {
-        const scale = size / 40; // 이미지 크기 조정 (기본 이미지가 40x40 픽셀이라고 가정)
+        // 이미지의 원본 비율 유지
+        const imgWidth = img.width;
+        const imgHeight = img.height;
+        const scale = Math.min(size * 2 / imgWidth, size * 2 / imgHeight);
+        const drawWidth = imgWidth * scale;
+        const drawHeight = imgHeight * scale;
+        
         this.ctx.drawImage(
           img,
-          x - size,
-          y - size,
-          size * 2,
-          size * 2
+          x - drawWidth/2,
+          y - drawHeight/2,
+          drawWidth,
+          drawHeight
         );
         return;
       }
@@ -1736,4 +1763,6 @@ class Game {
   }
 }
 
-new Game();
+window.onload = function() {
+  const game = new Game();
+};
