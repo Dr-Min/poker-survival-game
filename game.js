@@ -884,6 +884,33 @@ class Game {
           drawWidth,
           drawHeight
         );
+
+        // 카드 문양과 숫자 표시
+        this.ctx.fillStyle = this.getCardColor(type);
+        this.ctx.font = `${size}px Arial`;
+        this.ctx.textAlign = "center";
+        
+        // 문양 이모티콘 선택
+        let symbol = '';
+        switch(type) {
+          case 'spade': symbol = '♠'; break;
+          case 'heart': symbol = '♥'; break;
+          case 'diamond': symbol = '♦'; break;
+          case 'clover': symbol = '♣'; break;
+        }
+        
+        // 숫자 변환 (1->A, 11->J, 12->Q, 13->K)
+        let displayNumber = number.toString();
+        switch(number) {
+          case 1: displayNumber = 'A'; break;
+          case 11: displayNumber = 'J'; break;
+          case 12: displayNumber = 'Q'; break;
+          case 13: displayNumber = 'K'; break;
+        }
+        
+        // 문양과 숫자 그리기
+        this.ctx.fillText(`${symbol} ${displayNumber}`, x, y - drawHeight/2 - 5);
+        
         return;
       }
     }
