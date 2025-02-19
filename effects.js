@@ -107,13 +107,14 @@ export class Effects {
 
     // 클로버 효과 적용
     if (cardCounts.clover >= 1) {
-      this.effects.clover.ricochetChance = 0.3;
+      this.effects.clover.ricochetChance = 0.9;
     }
     if (cardCounts.clover >= 2) {
       this.effects.clover.explosionEnabled = true;
     }
     if (cardCounts.clover >= 3) {
       this.effects.clover.bounceCount = 5;
+      this.effects.clover.ricochetChance = 1.0;
     }
     if (cardCounts.clover >= 4) {
       this.effects.clover.explosionSize = 2;
