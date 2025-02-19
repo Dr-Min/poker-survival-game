@@ -88,7 +88,11 @@ export class UI {
       0,
       Math.ceil((roundDuration - (now - roundStartTime)) / 1000)
     );
-    this.ctx.fillText(`남은 시간: ${timeLeft}초`, 20, 130);
+    this.ctx.fillText(
+      timeLeft > 0 ? `남은 시간: ${timeLeft}초` : "모든 적을 처치하세요!",
+      20,
+      130
+    );
 
     // 현재 무기 정보 표시
     this.ctx.font = "20px Arial";

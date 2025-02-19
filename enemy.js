@@ -66,13 +66,14 @@ export class Enemy {
 }
 
 export class EnemyManager {
-  constructor(cardManager) {
+  constructor(cardManager, game) {
     this.enemies = [];
     this.cardManager = cardManager;
+    this.game = game;
   }
 
   spawnEnemy(canvas, round, isRoundTransition) {
-    if (isRoundTransition) return;
+    if (isRoundTransition || !this.game.isSpawningEnemies) return;
 
     if (Math.random() < 0.016 * (1 + round * 0.1)) {
       const side = Math.floor(Math.random() * 4);

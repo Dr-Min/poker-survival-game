@@ -13,7 +13,7 @@ export class Game {
     // 매니저 클래스 초기화
     this.player = new Player(this.canvas);
     this.cardManager = new CardManager();
-    this.enemyManager = new EnemyManager(this.cardManager);
+    this.enemyManager = new EnemyManager(this.cardManager, this);
     this.bulletManager = new BulletManager();
     this.effects = new Effects();
     this.ui = new UI(this.canvas);
@@ -64,6 +64,7 @@ export class Game {
     this.isRoundTransition = false;
     this.roundTransitionDuration = 3000;
     this.roundTransitionStartTime = 0;
+    this.isSpawningEnemies = true;
 
     // 디버그 옵션
     this.debugOptions = {
@@ -356,10 +357,14 @@ export class Game {
     }
 
     const roundTimeElapsed = Date.now() - this.roundStartTime;
-    if (
-      roundTimeElapsed >= this.roundDuration ||
-      this.enemiesKilledInRound >= this.enemiesRequiredForNextRound
-    ) {
+
+    // 라운드 시간이 끝나면 적 생성 중단
+    if (roundTimeElapsed >= this.roundDuration) {
+      this.isSpawningEnemies = false;
+    }
+
+    // 적 생성이 중단되고 모든 적이 처치되었을 때 다음 라운드로
+    if (!this.isSpawningEnemies && this.enemyManager.enemies.length === 0) {
       this.startRoundTransition();
     }
   }
@@ -367,7 +372,6 @@ export class Game {
   startRoundTransition() {
     this.isRoundTransition = true;
     this.roundTransitionStartTime = Date.now();
-    this.enemyManager.clearEnemies();
     this.bulletManager.clearBullets();
     this.player.heal(2);
   }
@@ -375,6 +379,7 @@ export class Game {
   startNextRound() {
     this.round++;
     this.isRoundTransition = false;
+    this.isSpawningEnemies = true; // 새 라운드 시작시 적 생성 활성화
     this.enemiesKilledInRound = 0;
     this.roundStartTime = Date.now();
     this.enemiesRequiredForNextRound = Math.floor(10 * (1 + this.round * 0.2));
