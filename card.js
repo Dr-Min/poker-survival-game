@@ -166,4 +166,9 @@ export class CardManager {
   getCollectedCards() {
     return this.collectedCards;
   }
+
+  clearCards() {
+    this.collectedCards = [];
+    this.cards = [];
+  }
 }

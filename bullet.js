@@ -262,7 +262,8 @@ class ExplosionAnimation {
 }
 
 export class BulletManager {
-  constructor() {
+  constructor(game) {
+    this.game = game;
     this.bullets = [];
     this.ricochetBullets = [];
     this.explosionAnimations = [];
@@ -569,29 +570,59 @@ export class BulletManager {
   checkBulletCollisions(bullet, enemies, effects) {
     let hasHit = false;
 
-    enemies.forEach((enemy) => {
-      if (!enemy.isDead && !bullet.hitEnemies.includes(enemy.id)) {
-        const dx = bullet.x - enemy.x;
-        const dy = bullet.y - enemy.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+    // 보스와의 충돌 체크
+    if (this.game && this.game.isBossBattle && this.game.boss) {
+      const boss = this.game.boss;
+      const dx = bullet.x - boss.x;
+      const dy = bullet.y - boss.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (distance < (bullet.size + enemy.size) / 2) {
-          // 데미지 계산 및 적용
-          const finalDamage = this.calculateDamage(bullet, enemy, effects);
-          this.applyDamage(bullet, enemy, finalDamage, effects, enemies);
+      if (distance < (bullet.size + boss.size) / 2) {
+        // 데미지 계산 및 적용
+        const finalDamage = this.calculateDamage(bullet, boss, effects);
+        boss.takeDamage(finalDamage);
 
-          // 도탄 효과 처리
-          if (
-            !bullet.constructor.name.includes("Ricochet") &&
-            effects.clover.count >= 1
-          ) {
-            this.handleRicochet(enemy, enemies, bullet, effects);
-          }
-
-          hasHit = !bullet.isPiercing;
+        // 데미지 텍스트 표시
+        if (this.ui) {
+          this.ui.addDamageText(
+            boss.x,
+            boss.y - boss.size,
+            finalDamage,
+            "#ff0000"
+          );
         }
+
+        hasHit = !bullet.isPiercing;
+        return hasHit;
       }
-    });
+    }
+
+    // 일반 적과의 충돌 체크 (보스전이 아닐 때만)
+    if (!this.game || !this.game.isBossBattle) {
+      enemies.forEach((enemy) => {
+        if (!enemy.isDead && !bullet.hitEnemies.includes(enemy.id)) {
+          const dx = bullet.x - enemy.x;
+          const dy = bullet.y - enemy.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < (bullet.size + enemy.size) / 2) {
+            // 데미지 계산 및 적용
+            const finalDamage = this.calculateDamage(bullet, enemy, effects);
+            this.applyDamage(bullet, enemy, finalDamage, effects, enemies);
+
+            // 도탄 효과 처리
+            if (
+              !bullet.constructor.name.includes("Ricochet") &&
+              effects.clover.count >= 1
+            ) {
+              this.handleRicochet(enemy, enemies, bullet, effects);
+            }
+
+            hasHit = !bullet.isPiercing;
+          }
+        }
+      });
+    }
 
     return hasHit;
   }

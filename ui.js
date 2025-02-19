@@ -2,50 +2,49 @@ export class UI {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
+    this.cardImages = {};
+    this.collectedCards = [];
+    this.cardClickAreas = [];
     this.damageTexts = [];
-    this.cardImages = {}; // 이미지 캐시
-    this.loadedImages = new Set(); // 로드된 이미지 추적
-    this.selectedType = null; // 디버그 모드 선택된 카드 타입
-    this.selectedNumber = null; // 디버그 모드 선택된 카드 숫자
-    this.preloadAllCardImages(); // 모든 카드 이미지 미리 로드
+    this.cardBackImage = new Image();
+    this.cardBackImage.src = "V2_4x/PixelPlebes_V2_4x__53.png";
+    this.preloadAllCardImages();
   }
 
-  // 모든 카드 이미지 프리로드
   async preloadAllCardImages() {
-    const types = ["spade", "heart", "diamond", "clover"];
+    const types = ["heart", "diamond", "spade", "clover"];
     const numbers = Array.from({ length: 13 }, (_, i) => i + 1);
 
-    const loadPromises = [];
-
-    types.forEach((type) => {
-      numbers.forEach((number) => {
-        const key = `${type}_${number}`;
-        if (!this.loadedImages.has(key)) {
-          this.loadedImages.add(key);
-          this.cardImages[key] = new Image();
-
-          const promise = new Promise((resolve) => {
-            this.cardImages[key].onload = resolve;
-            this.cardImages[key].onerror = resolve; // 에러 시에도 진행
-          });
-
-          loadPromises.push(promise);
-          const fileNumber = this.getFileNumber(type, number);
-          this.cardImages[
-            key
-          ].src = `V2_4x/PixelPlebes_V2_4x__${fileNumber}.png`;
-        }
-      });
-    });
-
-    await Promise.all(loadPromises);
-    console.log("모든 카드 이미지 로드 완료");
+    for (const type of types) {
+      for (const number of numbers) {
+        const fileNumber = this.getFileNumber(type, number);
+        const img = new Image();
+        img.src = `V2_4x/PixelPlebes_V2_4x__${fileNumber}.png`;
+        this.cardImages[`${type}_${number}`] = img;
+      }
+    }
   }
 
-  // 캐시된 이미지 가져오기
+  getFileNumber(type, number) {
+    const baseOffset = {
+      heart: 0,
+      diamond: 13,
+      spade: 26,
+      clover: 39,
+    }[type];
+
+    let fileIndex;
+    if (number === 1) fileIndex = 1;
+    else if (number === 13) fileIndex = 2;
+    else if (number === 12) fileIndex = 3;
+    else if (number === 11) fileIndex = 4;
+    else fileIndex = number + 3;
+
+    return String(baseOffset + fileIndex).padStart(2, "0");
+  }
+
   getCardImage(type, number) {
-    const key = `${type}_${number}`;
-    return this.cardImages[key];
+    return this.cardImages[`${type}_${number}`];
   }
 
   drawGameUI(gameState) {
@@ -60,6 +59,7 @@ export class UI {
       player,
       effects,
       collectedCards,
+      boss, // 보스 정보 추가
     } = gameState;
     const now = Date.now();
 
@@ -102,6 +102,11 @@ export class UI {
     // 체력바 그리기
     this.drawHealthBar(player);
 
+    // 보스가 있을 경우 보스 체력바 표시
+    if (boss) {
+      this.drawBossHealthBar(boss);
+    }
+
     // 수집된 카드 표시
     this.drawCollectedCards(collectedCards);
 
@@ -139,6 +144,46 @@ export class UI {
       healthBarY,
       healthBarWidth,
       healthBarHeight
+    );
+  }
+
+  drawBossHealthBar(boss) {
+    const healthBarWidth = 400;
+    const healthBarHeight = 30;
+    const healthBarX = (this.canvas.width - healthBarWidth) / 2;
+    const healthBarY = 20;
+
+    // 체력바 배경
+    this.ctx.fillStyle = "#444444";
+    this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+
+    // 현재 체력
+    const currentHealthWidth = (boss.hp / boss.maxHp) * healthBarWidth;
+    this.ctx.fillStyle = "#ff0000";
+    this.ctx.fillRect(
+      healthBarX,
+      healthBarY,
+      currentHealthWidth,
+      healthBarHeight
+    );
+
+    // 체력바 테두리
+    this.ctx.strokeStyle = "#ffffff";
+    this.ctx.strokeRect(
+      healthBarX,
+      healthBarY,
+      healthBarWidth,
+      healthBarHeight
+    );
+
+    // 보스 체력 텍스트
+    this.ctx.fillStyle = "white";
+    this.ctx.font = "20px Arial";
+    this.ctx.textAlign = "center";
+    this.ctx.fillText(
+      `보스 HP: ${Math.ceil(boss.hp)}/${boss.maxHp}`,
+      this.canvas.width / 2,
+      healthBarY + healthBarHeight + 20
     );
   }
 
@@ -285,6 +330,30 @@ export class UI {
     this.ctx.font = "24px Arial";
     this.ctx.fillText("디버그 모드 - 카드 선택", this.canvas.width / 2, 160);
 
+    // 보스전 진입 버튼
+    const bossButtonWidth = 200;
+    const bossButtonHeight = 50;
+    const bossButtonX = (this.canvas.width - bossButtonWidth) / 2;
+    const bossButtonY = 500;
+
+    this.ctx.fillStyle = "#ff4444";
+    this.ctx.fillRect(
+      bossButtonX,
+      bossButtonY,
+      bossButtonWidth,
+      bossButtonHeight
+    );
+    this.ctx.fillStyle = "white";
+    this.ctx.fillText("보스전 진입", this.canvas.width / 2, bossButtonY + 32);
+
+    // 보스전 버튼 영역 저장
+    this.bossButtonArea = {
+      x: bossButtonX,
+      y: bossButtonY,
+      width: bossButtonWidth,
+      height: bossButtonHeight,
+    };
+
     // 카드 타입과 숫자 선택 UI
     const types = ["스페이드", "하트", "다이아", "클로버"];
     const numbers = [
@@ -314,7 +383,7 @@ export class UI {
       const x = startX + (buttonWidth + padding) * i;
       this.ctx.fillStyle = this.getDebugButtonColor(type);
       this.ctx.fillRect(x, startY, buttonWidth, buttonHeight);
-      this.ctx.fillStyle = type === this.selectedType ? "black" : "white"; // 선택된 타입은 글자색 변경
+      this.ctx.fillStyle = type === this.selectedType ? "black" : "white";
       this.ctx.textAlign = "center";
       this.ctx.fillText(
         type,
@@ -334,7 +403,7 @@ export class UI {
       this.ctx.fillStyle =
         num === this.selectedNumber
           ? "rgba(200, 200, 200, 0.8)"
-          : "rgba(100, 100, 100, 0.8)"; // 선택된 숫자는 밝게
+          : "rgba(100, 100, 100, 0.8)";
       this.ctx.fillRect(x, y, buttonWidth, buttonHeight);
       this.ctx.fillStyle = "white";
       this.ctx.fillText(num, x + buttonWidth / 2, y + buttonHeight / 2 + 6);
@@ -459,21 +528,96 @@ export class UI {
   }
 
   drawRoundTransition(round) {
-    this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    // 반투명 배경 그라데이션
+    const gradient = this.ctx.createRadialGradient(
+      this.canvas.width / 2,
+      this.canvas.height / 2,
+      0,
+      this.canvas.width / 2,
+      this.canvas.height / 2,
+      this.canvas.width / 2
+    );
+    gradient.addColorStop(0, "rgba(0, 0, 0, 0.85)");
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0.95)");
+    this.ctx.fillStyle = gradient;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    this.ctx.fillStyle = "white";
-    this.ctx.font = "48px Arial";
+    // 라운드 클리어 텍스트 (빛나는 효과)
+    this.ctx.save();
+    this.ctx.shadowColor = "#ffff00";
+    this.ctx.shadowBlur = 20;
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "bold 64px Arial";
     this.ctx.textAlign = "center";
     this.ctx.fillText(
       `라운드 ${round} 클리어!`,
       this.canvas.width / 2,
-      this.canvas.height / 2 - 50
+      this.canvas.height / 2 - 80
+    );
+    this.ctx.restore();
+
+    // 다음 라운드 정보 박스
+    const boxWidth = 500;
+    const boxHeight = 180;
+    const boxX = (this.canvas.width - boxWidth) / 2;
+    const boxY = this.canvas.height / 2 - 20;
+
+    // 박스 배경
+    this.ctx.fillStyle = "rgba(50, 50, 50, 0.8)";
+    this.ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+    // 박스 테두리
+    this.ctx.strokeStyle = "#666666";
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+    // 다음 라운드 정보
+    this.ctx.fillStyle = "#00ffff";
+    this.ctx.font = "28px Arial";
+    this.ctx.fillText(`다음 라운드 정보`, this.canvas.width / 2, boxY + 40);
+
+    // 적 정보
+    this.ctx.fillStyle = "#ff9999";
+    this.ctx.font = "24px Arial";
+    this.ctx.fillText(
+      `- 적 체력: ${5 + Math.floor((round + 1) * 1.5)}`,
+      this.canvas.width / 2,
+      boxY + 80
     );
     this.ctx.fillText(
-      "다음 라운드 준비중...",
+      `- 적 속도: ${Math.round((1 + (round + 1) * 0.1) * 100)}%`,
       this.canvas.width / 2,
-      this.canvas.height / 2 + 50
+      boxY + 110
+    );
+
+    // 보스전 알림
+    if ((round + 1) % 5 === 0) {
+      this.ctx.fillStyle = "#ff0000";
+      this.ctx.font = "bold 32px Arial";
+      this.ctx.fillText(
+        "⚠ 다음은 보스전 입니다! ⚠",
+        this.canvas.width / 2,
+        boxY + 150
+      );
+    } else {
+      this.ctx.fillStyle = "#ffffff";
+      this.ctx.font = "24px Arial";
+      this.ctx.fillText(
+        `다음 보스전까지 ${5 - ((round + 1) % 5)}라운드`,
+        this.canvas.width / 2,
+        boxY + 150
+      );
+    }
+
+    // 준비 메시지 (깜빡이는 효과)
+    this.ctx.fillStyle = `rgba(255, 255, 255, ${
+      0.5 + Math.sin(Date.now() / 300) * 0.5
+    })`;
+    this.ctx.font = "32px Arial";
+    this.ctx.fillText(
+      "준비하세요...",
+      this.canvas.width / 2,
+      this.canvas.height - 100
     );
   }
 
@@ -556,24 +700,6 @@ export class UI {
     });
   }
 
-  getFileNumber(type, number) {
-    const baseOffset = {
-      heart: 0,
-      diamond: 13,
-      spade: 26,
-      clover: 39,
-    }[type];
-
-    let fileIndex;
-    if (number === 1) fileIndex = 1;
-    else if (number === 13) fileIndex = 2;
-    else if (number === 12) fileIndex = 3;
-    else if (number === 11) fileIndex = 4;
-    else fileIndex = number + 3;
-
-    return String(baseOffset + fileIndex).padStart(2, "0");
-  }
-
   getCardSymbol(type) {
     switch (type) {
       case "spade":
@@ -617,5 +743,584 @@ export class UI {
       default:
         return number.toString();
     }
+  }
+
+  drawPokerUI(pokerState, pokerSystem, selectedCards) {
+    // 반투명 배경
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 페이즈에 따른 UI 표시
+    switch (pokerState.phase) {
+      case "selection":
+        this.drawCardSelectionUI(selectedCards);
+        break;
+      case "betting":
+        this.drawBettingUI(pokerState, pokerSystem);
+        break;
+      case "showdown":
+        this.drawShowdownUI(pokerSystem);
+        break;
+    }
+
+    if (pokerState.phase === "betting") {
+      this.drawBettingUI(pokerState, pokerSystem);
+
+      // 보스의 마지막 액션 표시
+      if (pokerState.lastAction) {
+        this.ctx.fillStyle = "#ff0000";
+        this.ctx.font = "24px Arial";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText(pokerState.lastAction, this.canvas.width / 2, 100);
+      }
+    }
+  }
+
+  drawCardSelectionUI(selectedCards) {
+    // 반투명 배경
+    const gradient = this.ctx.createRadialGradient(
+      this.canvas.width / 2,
+      this.canvas.height / 2,
+      0,
+      this.canvas.width / 2,
+      this.canvas.height / 2,
+      this.canvas.width / 2
+    );
+    gradient.addColorStop(0, "rgba(0, 0, 0, 0.85)");
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0.95)");
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 제목
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "bold 36px Arial";
+    this.ctx.textAlign = "center";
+    this.ctx.fillText(
+      "포커 게임에 사용할 카드 2장을 선택하세요",
+      this.canvas.width / 2,
+      100
+    );
+
+    // 선택된 카드 수 표시
+    this.ctx.font = "24px Arial";
+    this.ctx.fillText(
+      `선택된 카드: ${selectedCards.length}/2`,
+      this.canvas.width / 2,
+      150
+    );
+
+    // 카드 그리기
+    const cardWidth = 120;
+    const cardHeight = 180;
+    const cardSpacing = 30;
+    const cardsPerRow = 5;
+    const totalWidth =
+      (cardWidth + cardSpacing) *
+        Math.min(this.collectedCards.length, cardsPerRow) -
+      cardSpacing;
+    const startX = (this.canvas.width - totalWidth) / 2;
+    const startY = (this.canvas.height - cardHeight) / 2;
+
+    // 클릭 영역 초기화
+    this.cardClickAreas = [];
+
+    // 소유한 카드 표시
+    this.collectedCards.forEach((card, i) => {
+      const row = Math.floor(i / cardsPerRow);
+      const col = i % cardsPerRow;
+      const x = startX + col * (cardWidth + cardSpacing);
+      const y = startY + row * (cardHeight + 60);
+
+      // 카드 그리기
+      this.drawCard(card, x, y, false);
+
+      // 선택된 카드 표시
+      const isSelected = selectedCards.some(
+        (selected) =>
+          selected.type === card.type && selected.number === card.number
+      );
+
+      // 중복 카드 체크
+      const isDuplicate =
+        selectedCards.length > 0 &&
+        selectedCards.some(
+          (selected) =>
+            selected.type === card.type && selected.number === card.number
+        );
+
+      if (isSelected) {
+        // 선택된 카드 테두리
+        this.ctx.strokeStyle = "#ffff00";
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeRect(x - 2, y - 2, cardWidth + 4, cardHeight + 4);
+      } else if (isDuplicate && selectedCards.length >= 2) {
+        // 중복 카드 표시 (선택 불가)
+        this.ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+        this.ctx.fillRect(x, y, cardWidth, cardHeight);
+      }
+
+      // 클릭 영역 저장
+      this.cardClickAreas.push({
+        x,
+        y,
+        width: cardWidth,
+        height: cardHeight,
+        card,
+      });
+    });
+
+    // 선택 완료 버튼
+    if (selectedCards.length === 2) {
+      const buttonWidth = 200;
+      const buttonHeight = 50;
+      const buttonX = (this.canvas.width - buttonWidth) / 2;
+      const buttonY = startY + cardHeight + 80;
+
+      this.ctx.fillStyle = "#4CAF50";
+      this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+      this.ctx.fillStyle = "#ffffff";
+      this.ctx.font = "bold 24px Arial";
+      this.ctx.fillText("선택 완료", this.canvas.width / 2, buttonY + 33);
+
+      // 버튼 클릭 영역 저장
+      this.confirmButtonArea = {
+        x: buttonX,
+        y: buttonY,
+        width: buttonWidth,
+        height: buttonHeight,
+      };
+    }
+  }
+
+  drawBettingUI(pokerState, pokerSystem) {
+    // 배경 그리기
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 보스 카드, 커뮤니티 카드, 플레이어 카드 표시
+    this.drawBossCards(pokerSystem.bossCards);
+    this.drawCommunityCards(pokerSystem.communityCards);
+    this.drawPlayerCards(pokerSystem.playerCards);
+
+    // 현재 베팅 정보 표시
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "24px Arial";
+    this.ctx.textAlign = "center";
+    this.ctx.fillText(
+      `현재 배팅: ${pokerState.currentBetPercent + 60}%`,
+      this.canvas.width / 2,
+      100
+    );
+
+    // 왼쪽에 베팅 시스템 설명
+    this.ctx.textAlign = "left";
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    this.ctx.fillRect(20, 150, 300, 300);
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "20px Arial";
+    const explanations = [
+      "베팅 시스템 설명",
+      "",
+      "기본 배팅: 60%",
+      "- 플레이어: 30%",
+      "- 보스: 30%",
+      "",
+      "레이즈 시스템",
+      "- 10%씩 추가 가능",
+      "- 최대 50%까지",
+      "",
+      "결과",
+      "- 승리: 보스 데미지 2/3",
+      "- 패배: 전체 데미지",
+      "- 폴드: 30% 데미지",
+    ];
+    explanations.forEach((text, index) => {
+      this.ctx.fillText(text, 40, 180 + index * 25);
+    });
+
+    // 플레이어 턴일 때만 버튼 표시 (오른쪽에 세로로 배치)
+    if (pokerState.currentTurn === "player") {
+      const buttonWidth = 180;
+      const buttonHeight = 50;
+      const buttonSpacing = 20;
+      const startX = this.canvas.width - buttonWidth - 40;
+      const startY = this.canvas.height / 2 - 100;
+
+      // 폴드 버튼
+      const foldButton = {
+        x: startX,
+        y: startY,
+        width: buttonWidth,
+        height: buttonHeight,
+      };
+
+      this.ctx.fillStyle = "#ff4444";
+      this.ctx.fillRect(foldButton.x, foldButton.y, buttonWidth, buttonHeight);
+      this.ctx.fillStyle = "#ffffff";
+      this.ctx.textAlign = "center";
+      this.ctx.fillText("폴드", startX + buttonWidth / 2, startY + 35);
+
+      // 콜 버튼
+      const callButton = {
+        x: startX,
+        y: startY + buttonHeight + buttonSpacing,
+        width: buttonWidth,
+        height: buttonHeight,
+      };
+
+      this.ctx.fillStyle = "#4444ff";
+      this.ctx.fillRect(callButton.x, callButton.y, buttonWidth, buttonHeight);
+      this.ctx.fillStyle = "#ffffff";
+      this.ctx.fillText("콜", startX + buttonWidth / 2, callButton.y + 35);
+
+      // 레이즈 버튼 또는 최대 베팅 메시지
+      const raiseButton = {
+        x: startX,
+        y: startY + (buttonHeight + buttonSpacing) * 2,
+        width: buttonWidth,
+        height: buttonHeight,
+      };
+
+      if (pokerState.currentBetPercent < 50) {
+        this.ctx.fillStyle = "#44ff44";
+        this.ctx.fillRect(
+          raiseButton.x,
+          raiseButton.y,
+          buttonWidth,
+          buttonHeight
+        );
+        this.ctx.fillStyle = "#ffffff";
+        this.ctx.fillText(
+          "레이즈 (10%)",
+          startX + buttonWidth / 2,
+          raiseButton.y + 35
+        );
+      } else {
+        this.ctx.fillStyle = "#888888";
+        this.ctx.fillRect(
+          raiseButton.x,
+          raiseButton.y,
+          buttonWidth,
+          buttonHeight
+        );
+        this.ctx.fillStyle = "#ffffff";
+        this.ctx.fillText(
+          "최대 베팅",
+          startX + buttonWidth / 2,
+          raiseButton.y + 35
+        );
+      }
+
+      // 버튼 영역 저장
+      this.bettingButtonAreas = {
+        fold: foldButton,
+        call: callButton,
+        raise: [raiseButton],
+      };
+    }
+  }
+
+  drawShowdownUI(pokerSystem) {
+    const now = Date.now();
+    const startTime = pokerSystem.showdownStartTime || now;
+    const elapsedTime = now - startTime;
+
+    // 배경 그리기
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 커뮤니티 카드와 플레이어 카드는 항상 표시
+    this.drawCommunityCards(pokerSystem.communityCards);
+    this.drawPlayerCards(pokerSystem.playerCards);
+
+    // 보스 카드 순차적 공개
+    const cardRevealInterval = 1000; // 1초 간격
+    pokerSystem.bossCards.forEach((card, index) => {
+      const shouldReveal = elapsedTime >= cardRevealInterval * index;
+      this.drawBossCard(card, index, shouldReveal);
+    });
+
+    // 모든 카드가 공개된 후 결과 표시
+    const allCardsRevealed =
+      elapsedTime >=
+      cardRevealInterval * (pokerSystem.bossCards.length - 1) + 500;
+
+    if (allCardsRevealed) {
+      const result = pokerSystem.getGameResult();
+      if (result) {
+        // 결과 표시 박스
+        const boxWidth = 400;
+        const boxHeight = 200;
+        const boxX = (this.canvas.width - boxWidth) / 2;
+        const boxY = (this.canvas.height - boxHeight) / 2;
+
+        // 반투명 배경
+        this.ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+        this.ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+        // 테두리
+        this.ctx.strokeStyle = "#FFD700";
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+        // 결과 텍스트
+        this.ctx.fillStyle = "#ffffff";
+        this.ctx.font = "24px Arial";
+        this.ctx.textAlign = "center";
+
+        // 승자 표시
+        const winnerText =
+          result.winner === "player" ? "플레이어 승리!" : "보스 승리!";
+        this.ctx.fillStyle = result.winner === "player" ? "#4CAF50" : "#ff4444";
+        this.ctx.fillText(winnerText, this.canvas.width / 2, boxY + 50);
+
+        // 족보 표시
+        this.ctx.fillStyle = "#ffffff";
+        const playerHand = pokerSystem.calculateHandRank([
+          ...pokerSystem.playerCards,
+          ...pokerSystem.communityCards,
+        ]);
+        const bossHand = pokerSystem.calculateHandRank([
+          ...pokerSystem.bossCards,
+          ...pokerSystem.communityCards,
+        ]);
+        this.ctx.fillText(
+          `플레이어: ${playerHand.name}`,
+          this.canvas.width / 2,
+          boxY + 90
+        );
+        this.ctx.fillText(
+          `보스: ${bossHand.name}`,
+          this.canvas.width / 2,
+          boxY + 130
+        );
+
+        // 보스전 시작 버튼
+        const buttonWidth = 200;
+        const buttonHeight = 40;
+        const buttonX = (this.canvas.width - buttonWidth) / 2;
+        const buttonY = boxY + boxHeight - 60;
+
+        this.ctx.fillStyle = "#4CAF50";
+        this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+        this.ctx.fillStyle = "#ffffff";
+        this.ctx.font = "24px Arial";
+        this.ctx.fillText("보스전 시작", this.canvas.width / 2, buttonY + 28);
+
+        // 버튼 영역 저장
+        this.showdownConfirmButtonArea = {
+          x: buttonX,
+          y: buttonY,
+          width: buttonWidth,
+          height: buttonHeight,
+        };
+      }
+    }
+  }
+
+  drawBossCard(card, index, isRevealed) {
+    const cardWidth = 80;
+    const cardHeight = 120;
+    const startX = this.canvas.width / 2 - ((cardWidth + 20) * 2) / 2; // 보스는 항상 2장의 카드를 가지므로 2로 고정
+    const y = 50;
+    const x = startX + index * (cardWidth + 20);
+
+    if (!isRevealed) {
+      // 카드 뒷면 이미지 사용
+      if (this.cardBackImage.complete) {
+        this.ctx.drawImage(this.cardBackImage, x, y, cardWidth, cardHeight);
+      }
+    } else {
+      // 카드 앞면 이미지 사용
+      const img = this.getCardImage(card.type, card.number);
+      if (img && img.complete) {
+        this.ctx.drawImage(img, x, y, cardWidth, cardHeight);
+      }
+    }
+  }
+
+  drawCommunityCards(cards) {
+    const cardWidth = 120;
+    const cardHeight = 180;
+    const cardSpacing = 30;
+    const totalWidth = (cardWidth + cardSpacing) * cards.length - cardSpacing;
+    const startX = (this.canvas.width - totalWidth) / 2;
+    const y = this.canvas.height / 2 - cardHeight / 2;
+
+    cards.forEach((card, index) => {
+      const x = startX + (cardWidth + cardSpacing) * index;
+      this.drawCard(card, x, y);
+    });
+  }
+
+  drawPlayerCards(cards) {
+    const cardWidth = 120;
+    const cardHeight = 180;
+    const cardSpacing = 30;
+    const totalWidth = (cardWidth + cardSpacing) * cards.length - cardSpacing;
+    const startX = (this.canvas.width - totalWidth) / 2;
+    const y = this.canvas.height - cardHeight - 50;
+
+    cards.forEach((card, index) => {
+      const x = startX + (cardWidth + cardSpacing) * index;
+      this.drawCard(card, x, y);
+    });
+  }
+
+  drawBossCards(cards) {
+    const cardWidth = 120;
+    const cardHeight = 180;
+    const cardSpacing = 30;
+    const totalWidth = (cardWidth + cardSpacing) * cards.length - cardSpacing;
+    const startX = (this.canvas.width - totalWidth) / 2;
+    const y = 50;
+
+    cards.forEach((card, index) => {
+      const x = startX + (cardWidth + cardSpacing) * index;
+      this.drawCard(card, x, y, true);
+    });
+  }
+
+  drawCard(card, x, y, isHidden = false) {
+    const cardWidth = 120;
+    const cardHeight = 180;
+
+    // 카드 배경
+    this.ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+    this.ctx.fillRect(x, y, cardWidth, cardHeight);
+
+    if (!isHidden) {
+      // 카드 이미지 표시
+      const img = this.getCardImage(card.type, card.number);
+      if (img) {
+        this.ctx.drawImage(img, x, y, cardWidth, cardHeight);
+      }
+    } else {
+      // 뒷면 표시 (보스 카드)
+      this.ctx.fillStyle = "rgba(100, 100, 100, 0.5)";
+      this.ctx.fillRect(x, y, cardWidth, cardHeight);
+    }
+
+    // 카드 테두리
+    this.ctx.strokeStyle = isHidden ? "#666666" : this.getCardColor(card.type);
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(x, y, cardWidth, cardHeight);
+
+    if (!isHidden) {
+      // 카드 정보 표시
+      this.ctx.fillStyle = this.getCardColor(card.type);
+      this.ctx.font = "bold 24px Arial";
+      this.ctx.textAlign = "center";
+      this.ctx.fillText(
+        `${this.getDisplayNumber(card.number)} ${this.getCardSymbol(
+          card.type
+        )}`,
+        x + cardWidth / 2,
+        y + cardHeight + 30
+      );
+    }
+  }
+
+  drawStartScreen() {
+    // 배경 그라데이션
+    const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+    gradient.addColorStop(0, "#2c3e50");
+    gradient.addColorStop(1, "#3498db");
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 게임 제목
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "bold 48px Arial";
+    this.ctx.textAlign = "center";
+    this.ctx.fillText(
+      "포커 서바이벌",
+      this.canvas.width / 2,
+      this.canvas.height / 3
+    );
+
+    // 시작 버튼
+    const buttonWidth = 200;
+    const buttonHeight = 60;
+    const buttonX = this.canvas.width / 2 - buttonWidth / 2;
+    const buttonY = this.canvas.height / 2;
+
+    // 버튼 배경
+    this.ctx.fillStyle = "#27ae60";
+    this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+    // 버튼 텍스트
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "24px Arial";
+    this.ctx.fillText(
+      "게임 시작",
+      this.canvas.width / 2,
+      buttonY + buttonHeight / 2 + 8
+    );
+
+    // 버튼 영역 반환 (클릭 감지용)
+    return {
+      buttonBounds: {
+        x: buttonX,
+        y: buttonY,
+        width: buttonWidth,
+        height: buttonHeight,
+      },
+    };
+  }
+
+  drawBossPreviewScreen(communityCards) {
+    // 배경 그라데이션
+    const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+    gradient.addColorStop(0, "rgba(0, 0, 0, 0.85)");
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0.95)");
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 제목
+    this.ctx.fillStyle = "#ff4444";
+    this.ctx.font = "bold 48px Arial";
+    this.ctx.textAlign = "center";
+    this.ctx.fillText("보스전 시작!", this.canvas.width / 2, 100);
+
+    // 커뮤니티 카드 표시
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "24px Arial";
+    this.ctx.fillText("공용 카드", this.canvas.width / 2, 180);
+    this.drawCommunityCards(communityCards);
+
+    // 게임 규칙 설명
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "20px Arial";
+    const rules = [
+      "- 기본 판돈: 플레이어 30%, 보스 30%",
+      "- 레이즈: 10% 또는 20%",
+      "- 폴드 시: 플레이어 30% 데미지",
+      "- 승리 시: 보스에게 총 배팅의 2/3 데미지",
+      "- 패배 시: 총 배팅만큼 데미지",
+    ];
+    rules.forEach((rule, index) => {
+      this.ctx.fillText(rule, this.canvas.width / 2, 500 + index * 30);
+    });
+
+    // 계속하기 버튼
+    const buttonWidth = 200;
+    const buttonHeight = 50;
+    const buttonX = (this.canvas.width - buttonWidth) / 2;
+    const buttonY = this.canvas.height - 100;
+
+    this.ctx.fillStyle = "#27ae60";
+    this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "24px Arial";
+    this.ctx.fillText("계속하기", this.canvas.width / 2, buttonY + 33);
+
+    // 버튼 영역 저장
+    this.continueButtonArea = {
+      x: buttonX,
+      y: buttonY,
+      width: buttonWidth,
+      height: buttonHeight,
+    };
   }
 }
