@@ -17,6 +17,7 @@ class BaseBullet {
     this.speedX = dx;
     this.speedY = dy;
     this.size = size;
+    this.originalSize = size; // 원래 크기 저장
     this.damage = damage;
     this.isPiercing = isPiercing;
     this.color = color;
@@ -68,6 +69,28 @@ class BaseBullet {
   }
 
   draw(ctx) {
+    // 도탄인 경우 적과의 거리 계산
+    if (
+      this.constructor.name === "RicochetBullet" &&
+      this.targetEnemy &&
+      !this.targetEnemy.isDead
+    ) {
+      const dx = this.targetEnemy.x - this.x;
+      const dy = this.targetEnemy.y - this.y;
+      const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
+
+      // 적과의 거리에 따라 크기와 투명도 조절
+      const transitionDistance = 30; // 전환 거리 증가
+      if (distanceToTarget < transitionDistance) {
+        const scale = 0.3 + (0.7 * distanceToTarget) / transitionDistance; // 최소 크기를 30%로 감소
+        this.size = this.originalSize * scale;
+        ctx.globalAlpha = 0.4 + (0.6 * distanceToTarget) / transitionDistance; // 최소 투명도를 40%로 증가
+      } else {
+        this.size = this.originalSize;
+        ctx.globalAlpha = 1;
+      }
+    }
+
     if (this.cardImage && this.cardImage.complete) {
       // 카드 이미지의 회전
       ctx.save();
@@ -106,6 +129,9 @@ class BaseBullet {
       ctx.lineTo(this.x, this.y);
       ctx.stroke();
     }
+
+    // globalAlpha 복원
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -155,14 +181,6 @@ class RicochetBullet extends BaseBullet {
     this.lastHitTime = 0;
 
     this.updateDirection();
-
-    console.log("도탄 총알 생성:", {
-      위치: { x: this.x, y: this.y },
-      목표: { x: targetEnemy.x, y: targetEnemy.y },
-      현재_도탄수: this.bounceCount,
-      최대_도탄수: this.maxBounces,
-      클로버개수: effects.clover.count,
-    });
   }
 
   updateDirection() {
@@ -190,11 +208,6 @@ class RicochetBullet extends BaseBullet {
 
       // 적과 충분히 가까워지면 즉시 다음 도탄 준비
       if (distance < 5) {
-        console.log("도탄 타겟 도달:", {
-          클로버개수: this.effects.clover.count,
-          현재_도탄수: this.bounceCount,
-          최대_도탄수: this.maxBounces,
-        });
         return false; // 항상 현재 도탄은 제거
       }
     }
@@ -553,8 +566,6 @@ export class BulletManager {
 
       return !this.checkBulletCollisions(bullet, enemies, currentEffects);
     });
-
-    console.log("현재 도탄 총알 개수:", this.ricochetBullets.length);
   }
 
   isOutOfBounds(bullet, canvas) {
@@ -661,14 +672,6 @@ export class BulletManager {
 
       // 현재 도탄 횟수가 최대치보다 작을 때만 다음 도탄 생성
       if (bullet.bounceCount < maxBounces) {
-        console.log("도탄 연쇄 진행상황:", {
-          현재_도탄수: bullet.bounceCount,
-          최대_도탄수: maxBounces,
-          남은_도탄수: maxBounces - bullet.bounceCount,
-          클로버개수: effects.clover.count,
-          적_위치: { x: enemy.x, y: enemy.y },
-        });
-
         const nearbyEnemies = this.findNearbyEnemies(
           enemy,
           enemies,
@@ -692,15 +695,6 @@ export class BulletManager {
 
       // 클로버 2개 이상일 때만 폭발 효과 발동
       if (effects.clover.count >= 2 && Math.random() < 0.3) {
-        console.log("도탄 폭발 발생:", {
-          position: { x: enemy.x, y: enemy.y },
-          radius: effects.clover.count >= 4 ? 100 : 50,
-          damage: damage,
-          bulletId: bullet.id,
-          bounceCount: bullet.bounceCount,
-          클로버개수: effects.clover.count,
-        });
-
         const radius = effects.clover.count >= 4 ? 100 : 50;
         const affectedEnemies = this.createExplosion(
           enemy.x,
