@@ -224,13 +224,13 @@ export class UI {
             text = `- 데미지 증폭 ${value * 100}%`;
             break;
           case "ricochetChance":
-            text = `- 도탄 확률 ${value * 100}%`;
+            text = `- 도탄 확률 ${value * 100}% (데미지 50%)`;
             break;
           case "explosionEnabled":
             text = `- 폭발 효과`;
             break;
           case "bounceCount":
-            text = value > 0 ? `- 도탄 강화` : "";
+            text = value > 0 ? `- 3연속 도탄 (데미지 100%)` : "";
             break;
           case "explosionSize":
             text = value > 1 ? `- 폭발 범위 ${value}배` : "";

@@ -5,16 +5,17 @@ export class Player {
     this.canvas = canvas;
     this.x = canvas.width / 2;
     this.y = canvas.height / 2;
-    this.size = 30;
-    this.speed = 4;
-    this.hp = 5;
-    this.maxHp = 5;
+    this.size = 20;
+    this.speed = 1.6;
+    this.hp = 10;
+    this.maxHp = 10;
     this.invincible = false;
     this.invincibleTime = 1000;
     this.bulletSpeed = 5.6;
     this.lastShot = 0;
     this.shotInterval = 600;
     this.bulletDamage = 1;
+    this.lastHitTime = 0;
 
     // 플레이어 이미지 로드
     this.image = new Image();

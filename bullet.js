@@ -9,7 +9,8 @@ class BaseBullet {
     size,
     damage,
     isPiercing = false,
-    color = "#ffff00"
+    color = "#ffff00",
+    cardInfo = null
   ) {
     this.x = x;
     this.y = y;
@@ -22,6 +23,42 @@ class BaseBullet {
     this.id = Date.now() + Math.random();
     this.hitEnemies = [];
     this.createdTime = Date.now();
+    this.cardInfo = cardInfo;
+    this.cardImage = null;
+    if (cardInfo) {
+      this.loadCardImage();
+    } else {
+      // 기본 카드 이미지 로드
+      this.cardImage = new Image();
+      this.cardImage.src = "V2_4x/PixelPlebes_V2_4x__53.png";
+    }
+  }
+
+  loadCardImage() {
+    this.cardImage = new Image();
+    const fileNumber = this.getFileNumber(
+      this.cardInfo.type,
+      this.cardInfo.number
+    );
+    this.cardImage.src = `V2_4x/PixelPlebes_V2_4x__${fileNumber}.png`;
+  }
+
+  getFileNumber(type, number) {
+    const baseOffset = {
+      heart: 0,
+      diamond: 13,
+      spade: 26,
+      clover: 39,
+    }[type];
+
+    let fileIndex;
+    if (number === 1) fileIndex = 1;
+    else if (number === 13) fileIndex = 2;
+    else if (number === 12) fileIndex = 3;
+    else if (number === 11) fileIndex = 4;
+    else fileIndex = number + 3;
+
+    return String(baseOffset + fileIndex).padStart(2, "0");
   }
 
   update(canvas) {
@@ -31,10 +68,35 @@ class BaseBullet {
   }
 
   draw(ctx) {
-    ctx.fillStyle = this.color;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-    ctx.fill();
+    if (this.cardImage && this.cardImage.complete) {
+      // 카드 이미지의 회전
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      const angle = Math.atan2(this.speedY, this.speedX) + Math.PI / 2;
+      ctx.rotate(angle);
+
+      // 이미지 비율 계산
+      const imageRatio = this.cardImage.width / this.cardImage.height;
+      let drawWidth, drawHeight;
+
+      // 총알 크기(this.size)를 기준으로 비율 유지하며 크기 조정
+      if (imageRatio > 1) {
+        drawWidth = this.size * 3.5;
+        drawHeight = drawWidth / imageRatio;
+      } else {
+        drawHeight = this.size * 3.5;
+        drawWidth = drawHeight * imageRatio;
+      }
+
+      ctx.drawImage(
+        this.cardImage,
+        -drawWidth / 2,
+        -drawHeight / 2,
+        drawWidth,
+        drawHeight
+      );
+      ctx.restore();
+    }
 
     if (this.isPiercing) {
       ctx.strokeStyle = this.color;
@@ -80,24 +142,26 @@ class RicochetBullet extends BaseBullet {
     const startX = sourceEnemy.x + Math.cos(angle) * offset;
     const startY = sourceEnemy.y + Math.sin(angle) * offset;
 
-    super(startX, startY, 0, 0, size, damage * 0.8, true, "#50ff50");
+    // 클로버 개수에 따른 데미지 계산
+    const damageMult = effects.clover.count >= 3 ? 1 : 0.5;
+
+    super(startX, startY, 0, 0, size, damage * damageMult, true, "#50ff50");
     this.targetEnemy = targetEnemy;
     this.bounceCount = bounceCount;
-    this.speed = 6.0;
+    this.maxBounces = effects.clover.count >= 3 ? 3 : 1;
+    this.speed = 4.2;
     this.effects = effects;
     this.hitEnemies = [sourceEnemy.id];
     this.lastHitTime = 0;
 
-    // 초기 방향 설정
     this.updateDirection();
 
     console.log("도탄 총알 생성:", {
-      position: { x: this.x, y: this.y },
-      target: { x: targetEnemy.x, y: targetEnemy.y },
-      speed: this.speed,
-      sourceEnemyId: sourceEnemy.id,
-      bounceCount: this.bounceCount,
-      maxBounces: effects.clover.count >= 3 ? 3 : 1,
+      위치: { x: this.x, y: this.y },
+      목표: { x: targetEnemy.x, y: targetEnemy.y },
+      현재_도탄수: this.bounceCount,
+      최대_도탄수: this.maxBounces,
+      클로버개수: effects.clover.count,
     });
   }
 
@@ -124,17 +188,17 @@ class RicochetBullet extends BaseBullet {
       const dy = this.targetEnemy.y - this.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // 적과 충분히 가까워지면 다음 도탄 준비
+      // 적과 충분히 가까워지면 즉시 다음 도탄 준비
       if (distance < 5) {
-        this.hitEnemies.push(this.targetEnemy.id);
-        return false;
+        console.log("도탄 타겟 도달:", {
+          클로버개수: this.effects.clover.count,
+          현재_도탄수: this.bounceCount,
+          최대_도탄수: this.maxBounces,
+        });
+        return false; // 항상 현재 도탄은 제거
       }
     }
 
-    console.log("도탄 총알 위치 업데이트:", {
-      position: { x: this.x, y: this.y },
-      speed: { x: this.speedX, y: this.speedY },
-    });
     return true;
   }
 
@@ -209,19 +273,82 @@ export class BulletManager {
     this.ui = ui;
   }
 
-  createBullet(
-    x,
-    y,
-    dx,
-    dy,
-    size,
-    damage,
-    isPiercing = false,
-    color = "#ffff00",
-    effects = null,
-    isRicochet = false
-  ) {
-    const bullet = new Bullet(
+  getRandomCard(cards) {
+    if (!cards || cards.length === 0) return null;
+    return cards[Math.floor(Math.random() * cards.length)];
+  }
+
+  // 족보 확인 및 카드 선택 함수
+  selectCardsForBullet(cards) {
+    if (!cards || cards.length === 0) return null;
+
+    // 숫자별로 카드 그룹화
+    const numberGroups = {};
+    cards.forEach((card) => {
+      if (!numberGroups[card.number]) {
+        numberGroups[card.number] = [];
+      }
+      numberGroups[card.number].push(card);
+    });
+
+    // 페어 찾기 (2장 이상인 그룹)
+    const pairs = Object.entries(numberGroups)
+      .filter(([_, group]) => group.length >= 2)
+      .sort((a, b) => b[1].length - a[1].length);
+
+    if (pairs.length >= 2) {
+      // 투페어인 경우 각 페어에서 랜덤 선택
+      const firstPair = pairs[0][1];
+      const secondPair = pairs[1][1];
+      return {
+        type: "twoPair",
+        pairs: [firstPair, secondPair],
+      };
+    } else if (pairs.length === 1) {
+      // 원페어
+      return {
+        type: "onePair",
+        cards: pairs[0][1],
+      };
+    }
+
+    // 페어가 없으면 랜덤 카드 반환
+    return {
+      type: "highCard",
+      cards: [this.getRandomCard(cards)],
+    };
+  }
+
+  createBullet(config) {
+    const {
+      x,
+      y,
+      dx,
+      dy,
+      size,
+      damage,
+      isPiercing = false,
+      color = "#ffff00",
+      effects,
+      cards,
+    } = config;
+
+    let selectedCards = this.selectCardsForBullet(cards);
+    let cardInfo = null;
+
+    if (selectedCards) {
+      if (selectedCards.type === "twoPair") {
+        // 투페어인 경우 각 페어에서 랜덤 선택
+        const pairIndex = Math.floor(Math.random() * 2);
+        const selectedPair = selectedCards.pairs[pairIndex];
+        cardInfo = this.getRandomCard(selectedPair);
+      } else {
+        // 그 외의 경우
+        cardInfo = this.getRandomCard(selectedCards.cards);
+      }
+    }
+
+    const bullet = new BaseBullet(
       x,
       y,
       dx,
@@ -230,54 +357,38 @@ export class BulletManager {
       damage,
       isPiercing,
       color,
-      effects,
-      isRicochet
+      cardInfo
     );
+
     this.bullets.push(bullet);
     return bullet;
   }
 
   createBasicBullet(config) {
-    return this.createBullet(
-      config.x,
-      config.y,
-      config.dx * 5.6,
-      config.dy * 5.6,
-      5,
-      config.damage,
-      false,
-      "#ffff00",
-      config.effects,
-      false
-    );
+    return this.createBullet({
+      ...config,
+      size: 5,
+      isPiercing: false,
+      color: "#ffff00",
+    });
   }
 
   createDualBullet(config) {
     const offset = 10;
-    this.createBullet(
-      config.x - offset,
-      config.y,
-      config.dx * 5.6,
-      config.dy * 5.6,
-      5,
-      config.damage,
-      false,
-      "#ffff00",
-      config.effects,
-      false
-    );
-    this.createBullet(
-      config.x + offset,
-      config.y,
-      config.dx * 5.6,
-      config.dy * 5.6,
-      5,
-      config.damage,
-      false,
-      "#ffff00",
-      config.effects,
-      false
-    );
+    this.createBullet({
+      ...config,
+      x: config.x - offset,
+      size: 5,
+      isPiercing: false,
+      color: "#ffff00",
+    });
+    this.createBullet({
+      ...config,
+      x: config.x + offset,
+      size: 5,
+      isPiercing: false,
+      color: "#ffff00",
+    });
   }
 
   createDoubleDualBullet(config) {
@@ -292,18 +403,13 @@ export class BulletManager {
     shots.forEach((shot) => {
       setTimeout(() => {
         if (!config.isGameOver) {
-          this.createBullet(
-            config.x + shot.x,
-            config.y,
-            config.dx * 5.6,
-            config.dy * 5.6,
-            5,
-            config.damage,
-            false,
-            "#ffff00",
-            config.effects,
-            false
-          );
+          this.createBullet({
+            ...config,
+            x: config.x + shot.x,
+            size: 5,
+            isPiercing: false,
+            color: "#ffff00",
+          });
         }
       }, shot.delay);
     });
@@ -316,34 +422,24 @@ export class BulletManager {
         config.dx * Math.cos(angle) - config.dy * Math.sin(angle);
       const rotatedDy =
         config.dx * Math.sin(angle) + config.dy * Math.cos(angle);
-      this.createBullet(
-        config.x,
-        config.y,
-        rotatedDx * 5.6,
-        rotatedDy * 5.6,
-        5,
-        config.damage,
-        false,
-        "#ffff00",
-        config.effects,
-        false
-      );
+      this.createBullet({
+        ...config,
+        dx: rotatedDx,
+        dy: rotatedDy,
+        size: 5,
+        isPiercing: false,
+        color: "#ffff00",
+      });
     });
   }
 
   createLaserRailgun(config) {
-    this.createBullet(
-      config.x,
-      config.y,
-      config.dx * 5.6,
-      config.dy * 5.6,
-      3,
-      config.damage,
-      true,
-      "#00ffff",
-      config.effects,
-      false
-    );
+    this.createBullet({
+      ...config,
+      size: 3,
+      isPiercing: true,
+      color: "#00ffff",
+    });
   }
 
   createShotgunPistolCombo(config) {
@@ -354,65 +450,44 @@ export class BulletManager {
         config.dx * Math.cos(spread) - config.dy * Math.sin(spread);
       const rotatedDy =
         config.dx * Math.sin(spread) + config.dy * Math.cos(spread);
-      this.createBullet(
-        config.x,
-        config.y,
-        rotatedDx * 5.6,
-        rotatedDy * 5.6,
-        4,
-        config.damage * 0.5,
-        false,
-        "#ffff00",
-        config.effects,
-        false
-      );
+      this.createBullet({
+        ...config,
+        dx: rotatedDx,
+        dy: rotatedDy,
+        size: 4,
+        damage: config.damage * 0.5,
+        isPiercing: false,
+        color: "#ffff00",
+      });
     }
     // 정확한 단발
-    this.createBullet(
-      config.x,
-      config.y,
-      config.dx * 5.6,
-      config.dy * 5.6,
-      6,
-      config.damage,
-      false,
-      "#ffff00",
-      config.effects,
-      false
-    );
+    this.createBullet({
+      ...config,
+      size: 6,
+      isPiercing: false,
+      color: "#ffff00",
+    });
   }
 
   createPlasmaCannon(config) {
-    this.createBullet(
-      config.x,
-      config.y,
-      config.dx * 5.6,
-      config.dy * 5.6,
-      12,
-      config.damage,
-      false,
-      "#ff00ff",
-      config.effects,
-      false
-    );
+    this.createBullet({
+      ...config,
+      size: 12,
+      isPiercing: false,
+      color: "#ff00ff",
+    });
   }
 
   createQuadRocketLauncher(config) {
     for (let i = 0; i < 4; i++) {
       setTimeout(() => {
         if (!config.isGameOver) {
-          this.createBullet(
-            config.x,
-            config.y,
-            config.dx * 5.6,
-            config.dy * 5.6,
-            8,
-            config.damage,
-            false,
-            "#ff4400",
-            config.effects,
-            false
-          );
+          this.createBullet({
+            ...config,
+            size: 8,
+            isPiercing: false,
+            color: "#ff4400",
+          });
         }
       }, i * 100);
     }
@@ -425,36 +500,30 @@ export class BulletManager {
         config.dx * Math.cos(spread) - config.dy * Math.sin(spread);
       const rotatedDy =
         config.dx * Math.sin(spread) + config.dy * Math.cos(spread);
-      this.createBullet(
-        config.x,
-        config.y,
-        rotatedDx * 5.6,
-        rotatedDy * 5.6,
-        4,
-        config.damage * 0.5,
-        true,
-        "#ff0000",
-        config.effects,
-        false
-      );
+      this.createBullet({
+        ...config,
+        dx: rotatedDx,
+        dy: rotatedDy,
+        size: 4,
+        damage: config.damage * 0.5,
+        isPiercing: true,
+        color: "#ff0000",
+      });
     }
   }
 
   createOrbitalLaserStrike(config) {
     for (let i = 0; i < 16; i++) {
       const angle = (Math.PI * 2 * i) / 16;
-      this.createBullet(
-        config.x,
-        config.y,
-        Math.cos(angle) * 5.6,
-        Math.sin(angle) * 5.6,
-        6,
-        config.damage * 0.8,
-        true,
-        "#ffff00",
-        config.effects,
-        false
-      );
+      this.createBullet({
+        ...config,
+        dx: Math.cos(angle),
+        dy: Math.sin(angle),
+        size: 6,
+        damage: config.damage * 0.8,
+        isPiercing: true,
+        color: "#ffff00",
+      });
     }
   }
 
@@ -557,47 +626,62 @@ export class BulletManager {
 
     // 도탄 총알이 적을 맞췄을 때 다음 도탄 생성
     if (bullet.constructor.name.includes("Ricochet")) {
-      // 클로버 3개 이상일 때는 무조건 3번 튕김
-      if (effects.clover.count >= 3 && bullet.bounceCount < 2) {
+      const maxBounces = effects.clover.count >= 3 ? 3 : 1;
+
+      // 현재 도탄 횟수가 최대치보다 작을 때만 다음 도탄 생성
+      if (bullet.bounceCount < maxBounces) {
         console.log("도탄 연쇄 진행상황:", {
-          currentBounce: bullet.bounceCount,
-          maxBounce: 3,
-          remainingBounces: 3 - bullet.bounceCount,
-          bulletId: bullet.id,
-          hitEnemies: bullet.hitEnemies.length,
-          enemyPosition: { x: enemy.x, y: enemy.y },
+          현재_도탄수: bullet.bounceCount,
+          최대_도탄수: maxBounces,
+          남은_도탄수: maxBounces - bullet.bounceCount,
+          클로버개수: effects.clover.count,
+          적_위치: { x: enemy.x, y: enemy.y },
         });
-        this.createNextRicochet(
+
+        const nearbyEnemies = this.findNearbyEnemies(
           enemy,
           enemies,
           bullet,
-          effects,
-          bullet.bounceCount + 1
+          500
         );
+        if (nearbyEnemies.length > 0) {
+          const target = this.findClosestEnemy(enemy, nearbyEnemies);
+          const nextBullet = new RicochetBullet(
+            enemy,
+            target,
+            bullet.size,
+            bullet.damage,
+            effects,
+            bullet.bounceCount + 1
+          );
+          nextBullet.hitEnemies = [enemy.id];
+          this.ricochetBullets.push(nextBullet);
+        }
       }
-    }
 
-    // 도탄 총알이 맞았을 때 30% 확률로 폭발
-    if (bullet.constructor.name.includes("Ricochet") && Math.random() < 0.3) {
-      console.log("도탄 폭발 발생:", {
-        position: { x: enemy.x, y: enemy.y },
-        radius: effects.clover.count >= 4 ? 100 : 50,
-        damage: damage,
-        bulletId: bullet.id,
-        bounceCount: bullet.bounceCount,
-      });
+      // 클로버 2개 이상일 때만 폭발 효과 발동
+      if (effects.clover.count >= 2 && Math.random() < 0.3) {
+        console.log("도탄 폭발 발생:", {
+          position: { x: enemy.x, y: enemy.y },
+          radius: effects.clover.count >= 4 ? 100 : 50,
+          damage: damage,
+          bulletId: bullet.id,
+          bounceCount: bullet.bounceCount,
+          클로버개수: effects.clover.count,
+        });
 
-      const radius = effects.clover.count >= 4 ? 100 : 50;
-      const affectedEnemies = this.createExplosion(
-        enemy.x,
-        enemy.y,
-        radius,
-        damage,
-        enemies,
-        effects
-      );
+        const radius = effects.clover.count >= 4 ? 100 : 50;
+        const affectedEnemies = this.createExplosion(
+          enemy.x,
+          enemy.y,
+          radius,
+          damage,
+          enemies,
+          effects
+        );
 
-      console.log("폭발 영향받은 적 수:", affectedEnemies.length);
+        console.log("폭발 영향받은 적 수:", affectedEnemies.length);
+      }
     }
 
     // 적 처치 체크
@@ -716,20 +800,81 @@ export class BulletManager {
   }
 
   handleRicochet(sourceEnemy, enemies, sourceBullet, effects) {
+    // 클로버가 1개 이상일 때만 도탄 가능
+    if (effects.clover.count < 1) return;
+
     const ricochetChance = effects.clover.ricochetChance;
     const roll = Math.random();
 
-    console.log("Ricochet chance check:", {
-      chance: ricochetChance,
-      roll: roll,
-      willRicochet: roll < ricochetChance,
+    console.log("도탄 확률 체크:", {
+      클로버개수: effects.clover.count,
+      확률: ricochetChance,
+      주사위: roll,
+      성공여부: roll < ricochetChance,
     });
 
     // 30% 확률로 도탄 발생
     if (roll < ricochetChance) {
-      // 첫 번째 도탄 생성
-      this.createNextRicochet(sourceEnemy, enemies, sourceBullet, effects, 0);
+      const nearbyEnemies = this.findNearbyEnemies(
+        sourceEnemy,
+        enemies,
+        sourceBullet,
+        500
+      );
+
+      if (nearbyEnemies.length > 0) {
+        const target = this.findClosestEnemy(sourceEnemy, nearbyEnemies);
+
+        // 클로버 개수에 따른 도탄 생성
+        const ricochetBullet = new RicochetBullet(
+          sourceEnemy,
+          target,
+          sourceBullet.size,
+          sourceBullet.damage,
+          effects,
+          effects.clover.count >= 3 ? 0 : 1 // 클로버 3개 이상일 때는 0부터 시작
+        );
+
+        // hitEnemies 배열 초기화 (현재 맞은 적만 포함)
+        ricochetBullet.hitEnemies = [sourceEnemy.id];
+        this.ricochetBullets.push(ricochetBullet);
+
+        console.log("도탄 생성됨:", {
+          시작위치: { x: sourceEnemy.x, y: sourceEnemy.y },
+          목표위치: { x: target.x, y: target.y },
+          클로버개수: effects.clover.count,
+          현재_도탄수: ricochetBullet.bounceCount,
+          최대_도탄수: ricochetBullet.maxBounces,
+        });
+      }
     }
+  }
+
+  findNearbyEnemies(sourceEnemy, enemies, sourceBullet, searchRadius) {
+    return enemies.filter(
+      (e) =>
+        !e.isDead &&
+        !e.isAlly &&
+        e !== sourceEnemy &&
+        !sourceBullet.hitEnemies.includes(e.id) &&
+        Math.sqrt(
+          Math.pow(e.x - sourceEnemy.x, 2) + Math.pow(e.y - sourceEnemy.y, 2)
+        ) <= searchRadius
+    );
+  }
+
+  findClosestEnemy(sourceEnemy, enemies) {
+    return enemies.reduce((closest, current) => {
+      const closestDist = Math.sqrt(
+        Math.pow(closest.x - sourceEnemy.x, 2) +
+          Math.pow(closest.y - sourceEnemy.y, 2)
+      );
+      const currentDist = Math.sqrt(
+        Math.pow(current.x - sourceEnemy.x, 2) +
+          Math.pow(current.y - sourceEnemy.y, 2)
+      );
+      return currentDist < closestDist ? current : closest;
+    });
   }
 
   createNextRicochet(
@@ -739,6 +884,18 @@ export class BulletManager {
     effects,
     currentBounceCount
   ) {
+    const maxBounces = effects.clover.count >= 3 ? 3 : 1;
+
+    // 최대 도탄 횟수를 초과하면 중단
+    if (currentBounceCount >= maxBounces) {
+      console.log("도탄 최대 횟수 도달:", {
+        현재_도탄수: currentBounceCount,
+        최대_도탄수: maxBounces,
+        클로버개수: effects.clover.count,
+      });
+      return;
+    }
+
     // 주변 적 찾기 (이미 맞은 적 제외)
     const searchRadius = 500; // 도탄 범위 500으로 증가
     const nearbyEnemies = enemies.filter(

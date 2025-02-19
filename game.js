@@ -10,6 +10,14 @@ export class Game {
     this.canvas = document.getElementById("gameCanvas");
     this.ctx = this.canvas.getContext("2d");
 
+    // 기본 게임 해상도 설정
+    this.baseWidth = 1200;
+    this.baseHeight = 800;
+    this.aspectRatio = this.baseWidth / this.baseHeight;
+
+    // 화면 크기 초기화
+    this.handleResize();
+
     // 매니저 클래스 초기화
     this.player = new Player(this.canvas);
     this.cardManager = new CardManager();
@@ -82,11 +90,66 @@ export class Game {
     this.startGame();
   }
 
+  handleResize = () => {
+    const container = document.getElementById("gameContainer");
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    const containerAspectRatio = containerWidth / containerHeight;
+
+    let canvasWidth, canvasHeight;
+    let scale;
+
+    if (containerAspectRatio > this.aspectRatio) {
+      // 컨테이너가 더 넓은 경우
+      canvasHeight = containerHeight;
+      canvasWidth = containerHeight * this.aspectRatio;
+      scale = canvasHeight / this.baseHeight;
+    } else {
+      // 컨테이너가 더 좁은 경우
+      canvasWidth = containerWidth;
+      canvasHeight = containerWidth / this.aspectRatio;
+      scale = canvasWidth / this.baseWidth;
+    }
+
+    // 최소 크기 제한
+    const minScale = 0.5;
+    if (scale < minScale) {
+      scale = minScale;
+      canvasWidth = this.baseWidth * scale;
+      canvasHeight = this.baseHeight * scale;
+    }
+
+    // 최대 크기 제한
+    const maxScale = 2;
+    if (scale > maxScale) {
+      scale = maxScale;
+      canvasWidth = this.baseWidth * scale;
+      canvasHeight = this.baseHeight * scale;
+    }
+
+    // 캔버스 크기 설정
+    this.canvas.width = this.baseWidth;
+    this.canvas.height = this.baseHeight;
+    this.canvas.style.width = `${canvasWidth}px`;
+    this.canvas.style.height = `${canvasHeight}px`;
+
+    // 현재 스케일 저장
+    this.currentScale = scale;
+
+    // 슈팅 버튼 위치 업데이트
+    this.shootButton = {
+      x: this.canvas.width - 80,
+      y: this.canvas.height - 80,
+      size: 60,
+    };
+  };
+
   setupEventListeners() {
     window.addEventListener("keydown", (e) => this.handleKeyDown(e));
     window.addEventListener("keyup", (e) => this.handleKeyUp(e));
     this.canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
     this.canvas.addEventListener("click", (e) => this.handleClick(e));
+    window.addEventListener("resize", this.handleResize);
   }
 
   handleKeyDown(e) {
@@ -126,14 +189,20 @@ export class Game {
 
   handleMouseMove(e) {
     const rect = this.canvas.getBoundingClientRect();
-    this.mouseX = e.clientX - rect.left;
-    this.mouseY = e.clientY - rect.top;
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+
+    this.mouseX = (e.clientX - rect.left) * scaleX;
+    this.mouseY = (e.clientY - rect.top) * scaleY;
   }
 
   handleClick(e) {
     const rect = this.canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
 
     if (this.isPaused) {
       this.ui.handleDebugClick(x, y);
@@ -194,8 +263,8 @@ export class Game {
     const dx = this.mouseX - this.player.x;
     const dy = this.mouseY - this.player.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    const normalizedDx = dx / distance;
-    const normalizedDy = dy / distance;
+    const normalizedDx = (dx / distance) * 3.6;
+    const normalizedDy = (dy / distance) * 3.6;
 
     const effects = this.effects.getEffects();
     const bulletConfig = {
@@ -206,6 +275,7 @@ export class Game {
       damage: this.effects.weaponSystem.calculateDamage(effects),
       effects: effects,
       isGameOver: this.isGameOver,
+      cards: this.cardManager.getCollectedCards(),
     };
 
     // 각 무기별 총알 생성 시 effects 전달

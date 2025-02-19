@@ -114,7 +114,6 @@ export class Effects {
     }
     if (cardCounts.clover >= 3) {
       this.effects.clover.bounceCount = 5;
-      this.effects.clover.ricochetChance = 0.3;
     }
     if (cardCounts.clover >= 4) {
       this.effects.clover.explosionSize = 2;
