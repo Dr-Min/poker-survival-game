@@ -150,10 +150,56 @@ class RicochetBullet extends BaseBullet {
   }
 }
 
+class ExplosionAnimation {
+  constructor(x, y, radius, color = "#ff6600") {
+    this.x = x;
+    this.y = y;
+    this.maxRadius = radius;
+    this.currentRadius = 0;
+    this.alpha = 1;
+    this.color = color;
+    this.duration = 500; // 애니메이션 지속 시간 (ms)
+    this.startTime = Date.now();
+    this.finished = false;
+  }
+
+  update() {
+    const elapsed = Date.now() - this.startTime;
+    const progress = Math.min(elapsed / this.duration, 1);
+
+    this.currentRadius = this.maxRadius * Math.sin(progress * Math.PI);
+    this.alpha = 1 - progress;
+
+    if (progress >= 1) {
+      this.finished = true;
+    }
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+
+    // 외부 원
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.currentRadius, 0, Math.PI * 2);
+    ctx.fillStyle = this.color;
+    ctx.fill();
+
+    // 내부 원
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.currentRadius * 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
+
 export class BulletManager {
   constructor() {
     this.bullets = [];
     this.ricochetBullets = [];
+    this.explosionAnimations = [];
     this.ui = null;
   }
 
@@ -467,7 +513,7 @@ export class BulletManager {
         if (distance < (bullet.size + enemy.size) / 2) {
           // 데미지 계산 및 적용
           const finalDamage = this.calculateDamage(bullet, enemy, effects);
-          this.applyDamage(bullet, enemy, finalDamage, effects);
+          this.applyDamage(bullet, enemy, finalDamage, effects, enemies);
 
           // 도탄 효과 처리
           if (
@@ -496,7 +542,7 @@ export class BulletManager {
     return finalDamage;
   }
 
-  applyDamage(bullet, enemy, damage, effects) {
+  applyDamage(bullet, enemy, damage, effects, enemies) {
     // 다이아몬드 효과 적용
     if (effects.diamond.count >= 1) enemy.speed *= 0.7;
     if (effects.diamond.count >= 2) enemy.stunEndTime = Date.now() + 1000;
@@ -513,24 +559,55 @@ export class BulletManager {
       this.ui.addDamageText(enemy.x, enemy.y - enemy.size, damage, damageColor);
     }
 
+    // 도탄 총알이 맞았을 때 30% 확률로 폭발
+    if (bullet.constructor.name.includes("Ricochet") && Math.random() < 0.3) {
+      console.log("도탄 폭발 발생:", {
+        position: { x: enemy.x, y: enemy.y },
+        radius: effects.clover.count >= 4 ? 100 : 50,
+        damage: damage,
+      });
+
+      const radius = effects.clover.count >= 4 ? 100 : 50;
+      const affectedEnemies = this.createExplosion(
+        enemy.x,
+        enemy.y,
+        radius,
+        damage,
+        enemies,
+        effects
+      );
+
+      console.log("폭발 영향받은 적 수:", affectedEnemies.length);
+    }
+
     // 적 처치 체크
     if (enemy.hp <= 0) {
       enemy.isDead = true;
-      if (effects.clover.count >= 2) {
-        const radius = effects.clover.count >= 4 ? 100 : 50;
-        this.createExplosion(
-          enemy.x,
-          enemy.y,
-          radius,
-          damage * 0.5,
-          enemies,
-          effects
-        );
-      }
+      console.log("적 처치됨:", {
+        enemyId: enemy.id,
+        position: { x: enemy.x, y: enemy.y },
+        cloverCount: effects.clover.count,
+      });
     }
   }
 
   createExplosion(x, y, radius, damage, enemies, effects) {
+    // 폭발 애니메이션 생성
+    const explosionColor = effects.clover.count >= 4 ? "#50ff50" : "#ff6600";
+    this.explosionAnimations.push(
+      new ExplosionAnimation(x, y, radius, explosionColor)
+    );
+
+    // 폭발 효과를 받은 적들을 추적
+    const affectedEnemies = [];
+
+    console.log("폭발 생성:", {
+      position: { x, y },
+      radius,
+      damage,
+      totalEnemies: enemies.length,
+    });
+
     enemies.forEach((enemy) => {
       if (!enemy.isDead && !enemy.isAlly) {
         const dx = enemy.x - x;
@@ -538,10 +615,36 @@ export class BulletManager {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < radius) {
-          const damageMultiplier = 1 - distance / radius;
+          // 폭발 중심으로부터의 방향 계산
+          const angle = Math.atan2(dy, dx);
+          const knockbackDistance = (radius - distance) * 2; // 넉백 거리 4배 증가
+
+          const oldPos = { x: enemy.x, y: enemy.y };
+
+          // 넉백 적용
+          enemy.x += Math.cos(angle) * knockbackDistance;
+          enemy.y += Math.sin(angle) * knockbackDistance;
+
+          // 화면 경계 체크
+          enemy.x = Math.max(enemy.size, Math.min(1200 - enemy.size, enemy.x));
+          enemy.y = Math.max(enemy.size, Math.min(800 - enemy.size, enemy.y));
+
+          const damageMultiplier = Math.max(0.5, 1 - distance / radius); // 최소 데미지를 50%로 설정
           const explosionDamage = damage * damageMultiplier;
 
+          console.log("적 폭발 영향받음:", {
+            enemyId: enemy.id,
+            distance,
+            knockback: {
+              from: oldPos,
+              to: { x: enemy.x, y: enemy.y },
+              distance: knockbackDistance,
+            },
+            damage: explosionDamage,
+          });
+
           enemy.hp -= explosionDamage;
+          affectedEnemies.push(enemy);
 
           // 다이아몬드 범위 감속 효과
           if (effects.diamond.count >= 3) {
@@ -553,6 +656,12 @@ export class BulletManager {
 
             // 클로버 2차 폭발
             if (effects.clover.count >= 4) {
+              console.log("2차 폭발 발생:", {
+                position: { x: enemy.x, y: enemy.y },
+                radius: radius * 0.5,
+                damage: damage * 0.5,
+              });
+
               this.createExplosion(
                 enemy.x,
                 enemy.y,
@@ -566,12 +675,21 @@ export class BulletManager {
         }
       }
     });
+
+    return affectedEnemies;
   }
 
   drawBullets(ctx) {
     [...this.bullets, ...this.ricochetBullets].forEach((bullet) =>
       bullet.draw(ctx)
     );
+
+    // 폭발 애니메이션 업데이트 및 그리기
+    this.explosionAnimations = this.explosionAnimations.filter((explosion) => {
+      explosion.update();
+      explosion.draw(ctx);
+      return !explosion.finished;
+    });
   }
 
   handleRicochet(sourceEnemy, enemies, sourceBullet, effects) {
@@ -622,6 +740,9 @@ export class BulletManager {
           sourceBullet.damage,
           effects
         );
+
+        // 도탄 총알에 원본 총알의 hitEnemies 복사
+        ricochetBullet.hitEnemies = [...sourceBullet.hitEnemies];
 
         this.ricochetBullets.push(ricochetBullet);
       }
