@@ -63,9 +63,16 @@ class Bullet extends BaseBullet {
 }
 
 class RicochetBullet extends BaseBullet {
-  constructor(sourceEnemy, targetEnemy, size, damage, effects) {
+  constructor(
+    sourceEnemy,
+    targetEnemy,
+    size,
+    damage,
+    effects,
+    bounceCount = 0
+  ) {
     // 시작 위치를 적으로부터 약간 떨어진 곳으로 설정
-    const offset = 30; // 시작 오프셋을 30픽셀로 증가
+    const offset = 30;
     const angle = Math.atan2(
       targetEnemy.y - sourceEnemy.y,
       targetEnemy.x - sourceEnemy.x
@@ -73,13 +80,13 @@ class RicochetBullet extends BaseBullet {
     const startX = sourceEnemy.x + Math.cos(angle) * offset;
     const startY = sourceEnemy.y + Math.sin(angle) * offset;
 
-    super(startX, startY, 0, 0, size, damage * 0.8, false, "#50ff50");
+    super(startX, startY, 0, 0, size, damage * 0.8, true, "#50ff50");
     this.targetEnemy = targetEnemy;
-    this.maxBounces = effects.clover?.count >= 3 ? 5 : 0;
-    this.bounceCount = 0;
-    this.speed = 3.0;
+    this.bounceCount = bounceCount;
+    this.speed = 6.0;
     this.effects = effects;
-    this.hitEnemies = [sourceEnemy.id]; // 시작할 때 원래 맞은 적을 히트 목록에 추가
+    this.hitEnemies = [sourceEnemy.id];
+    this.lastHitTime = 0;
 
     // 초기 방향 설정
     this.updateDirection();
@@ -89,6 +96,8 @@ class RicochetBullet extends BaseBullet {
       target: { x: targetEnemy.x, y: targetEnemy.y },
       speed: this.speed,
       sourceEnemyId: sourceEnemy.id,
+      bounceCount: this.bounceCount,
+      maxBounces: effects.clover.count >= 3 ? 3 : 1,
     });
   }
 
@@ -109,6 +118,19 @@ class RicochetBullet extends BaseBullet {
     this.updateDirection();
     super.update(canvas);
 
+    // 타겟 적과의 거리 체크
+    if (this.targetEnemy && !this.targetEnemy.isDead) {
+      const dx = this.targetEnemy.x - this.x;
+      const dy = this.targetEnemy.y - this.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // 적과 충분히 가까워지면 다음 도탄 준비
+      if (distance < 5) {
+        this.hitEnemies.push(this.targetEnemy.id);
+        return false;
+      }
+    }
+
     console.log("도탄 총알 위치 업데이트:", {
       position: { x: this.x, y: this.y },
       speed: { x: this.speedX, y: this.speedY },
@@ -125,28 +147,8 @@ class RicochetBullet extends BaseBullet {
   }
 
   handleBounce(canvas) {
-    const margin = 20;
-    let bounced = false;
-
-    if (this.x < margin || this.x > canvas.width - margin) {
-      this.speedX *= -1;
-      bounced = true;
-    }
-    if (this.y < margin || this.y > canvas.height - margin) {
-      this.speedY *= -1;
-      bounced = true;
-    }
-
-    if (bounced) {
-      this.bounceCount++;
-      console.log("도탄 총알 바운스:", {
-        bounceCount: this.bounceCount,
-        position: { x: this.x, y: this.y },
-        newSpeed: { x: this.speedX, y: this.speedY },
-      });
-    }
-
-    return this.bounceCount < this.maxBounces;
+    // 벽 바운스 제거 (적에서 적으로만 튕기도록)
+    return true;
   }
 }
 
@@ -476,12 +478,6 @@ export class BulletManager {
 
       // 화면 밖 체크
       if (this.isOutOfBounds(bullet, canvas)) {
-        if (
-          currentEffects.clover.count >= 3 &&
-          bullet.bounceCount < bullet.maxBounces
-        ) {
-          return bullet.handleBounce(canvas);
-        }
         return false;
       }
 
@@ -559,12 +555,36 @@ export class BulletManager {
       this.ui.addDamageText(enemy.x, enemy.y - enemy.size, damage, damageColor);
     }
 
+    // 도탄 총알이 적을 맞췄을 때 다음 도탄 생성
+    if (bullet.constructor.name.includes("Ricochet")) {
+      // 클로버 3개 이상일 때는 무조건 3번 튕김
+      if (effects.clover.count >= 3 && bullet.bounceCount < 2) {
+        console.log("도탄 연쇄 진행상황:", {
+          currentBounce: bullet.bounceCount,
+          maxBounce: 3,
+          remainingBounces: 3 - bullet.bounceCount,
+          bulletId: bullet.id,
+          hitEnemies: bullet.hitEnemies.length,
+          enemyPosition: { x: enemy.x, y: enemy.y },
+        });
+        this.createNextRicochet(
+          enemy,
+          enemies,
+          bullet,
+          effects,
+          bullet.bounceCount + 1
+        );
+      }
+    }
+
     // 도탄 총알이 맞았을 때 30% 확률로 폭발
     if (bullet.constructor.name.includes("Ricochet") && Math.random() < 0.3) {
       console.log("도탄 폭발 발생:", {
         position: { x: enemy.x, y: enemy.y },
         radius: effects.clover.count >= 4 ? 100 : 50,
         damage: damage,
+        bulletId: bullet.id,
+        bounceCount: bullet.bounceCount,
       });
 
       const radius = effects.clover.count >= 4 ? 100 : 50;
@@ -587,6 +607,9 @@ export class BulletManager {
         enemyId: enemy.id,
         position: { x: enemy.x, y: enemy.y },
         cloverCount: effects.clover.count,
+        byRicochet: bullet.constructor.name.includes("Ricochet"),
+        bulletId: bullet.id,
+        bounceCount: bullet.bounceCount,
       });
     }
   }
@@ -702,50 +725,93 @@ export class BulletManager {
       willRicochet: roll < ricochetChance,
     });
 
+    // 30% 확률로 도탄 발생
     if (roll < ricochetChance) {
-      // 주변 적 찾을 때 현재 맞은 적을 제외하고 가장 가까운 적을 찾도록 수정
-      const nearbyEnemies = enemies.filter(
-        (e) =>
-          !e.isDead &&
-          !e.isAlly &&
-          e !== sourceEnemy &&
-          !sourceBullet.hitEnemies.includes(e.id) && // 이미 맞은 적 제외
-          Math.sqrt(
-            Math.pow(e.x - sourceEnemy.x, 2) + Math.pow(e.y - sourceEnemy.y, 2)
-          ) <= 300
+      // 첫 번째 도탄 생성
+      this.createNextRicochet(sourceEnemy, enemies, sourceBullet, effects, 0);
+    }
+  }
+
+  createNextRicochet(
+    sourceEnemy,
+    enemies,
+    sourceBullet,
+    effects,
+    currentBounceCount
+  ) {
+    // 주변 적 찾기 (이미 맞은 적 제외)
+    const searchRadius = 500; // 도탄 범위 500으로 증가
+    const nearbyEnemies = enemies.filter(
+      (e) =>
+        !e.isDead &&
+        !e.isAlly &&
+        e !== sourceEnemy &&
+        !sourceBullet.hitEnemies.includes(e.id) &&
+        Math.sqrt(
+          Math.pow(e.x - sourceEnemy.x, 2) + Math.pow(e.y - sourceEnemy.y, 2)
+        ) <= searchRadius
+    );
+
+    console.log("도탄 검색 정보:", {
+      bounceNumber: currentBounceCount + 1,
+      maxBounces: effects.clover.count >= 3 ? 3 : 1,
+      searchRadius,
+      sourcePosition: { x: sourceEnemy.x, y: sourceEnemy.y },
+      foundEnemies: nearbyEnemies.length,
+      totalHitEnemies: sourceBullet.hitEnemies.length,
+    });
+
+    if (nearbyEnemies.length > 0) {
+      // 가장 가까운 적을 목표로 선택
+      const target = nearbyEnemies.reduce((closest, current) => {
+        const closestDist = Math.sqrt(
+          Math.pow(closest.x - sourceEnemy.x, 2) +
+            Math.pow(closest.y - sourceEnemy.y, 2)
+        );
+        const currentDist = Math.sqrt(
+          Math.pow(current.x - sourceEnemy.x, 2) +
+            Math.pow(current.y - sourceEnemy.y, 2)
+        );
+        return currentDist < closestDist ? current : closest;
+      });
+
+      console.log("도탄 목표 선택:", {
+        targetPosition: { x: target.x, y: target.y },
+        distance: Math.sqrt(
+          Math.pow(target.x - sourceEnemy.x, 2) +
+            Math.pow(target.y - sourceEnemy.y, 2)
+        ),
+        currentBounce: currentBounceCount,
+        nextBounce: currentBounceCount + 1,
+      });
+
+      const ricochetBullet = new RicochetBullet(
+        sourceEnemy,
+        target,
+        sourceBullet.size,
+        sourceBullet.damage,
+        effects,
+        currentBounceCount
       );
 
-      console.log("찾은 주변 적 수:", nearbyEnemies.length);
-
-      if (nearbyEnemies.length > 0) {
-        // 가장 가까운 적을 목표로 선택
-        const target = nearbyEnemies.reduce((closest, current) => {
-          const closestDist = Math.sqrt(
-            Math.pow(closest.x - sourceEnemy.x, 2) +
-              Math.pow(closest.y - sourceEnemy.y, 2)
-          );
-          const currentDist = Math.sqrt(
-            Math.pow(current.x - sourceEnemy.x, 2) +
-              Math.pow(current.y - sourceEnemy.y, 2)
-          );
-          return currentDist < closestDist ? current : closest;
-        });
-
-        console.log("도탄 목표 적 위치:", { x: target.x, y: target.y });
-
-        const ricochetBullet = new RicochetBullet(
-          sourceEnemy,
-          target,
-          sourceBullet.size,
-          sourceBullet.damage,
-          effects
-        );
-
-        // 도탄 총알에 원본 총알의 hitEnemies 복사
-        ricochetBullet.hitEnemies = [...sourceBullet.hitEnemies];
-
-        this.ricochetBullets.push(ricochetBullet);
-      }
+      // 도탄 총알에 원본 총알의 hitEnemies 복사
+      ricochetBullet.hitEnemies = [...sourceBullet.hitEnemies];
+      this.ricochetBullets.push(ricochetBullet);
+    } else {
+      console.log("도탄 실패:", {
+        reason: "범위 내 적 없음",
+        searchRadius,
+        position: { x: sourceEnemy.x, y: sourceEnemy.y },
+        currentBounce: currentBounceCount,
+        maxBounces: effects.clover.count >= 3 ? 3 : 1,
+      });
     }
+  }
+
+  clearBullets() {
+    this.bullets = [];
+    this.ricochetBullets = [];
+    this.explosionAnimations = [];
+    console.log("모든 총알 초기화 완료");
   }
 }

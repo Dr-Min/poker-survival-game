@@ -368,7 +368,8 @@ export class Game {
     this.isRoundTransition = true;
     this.roundTransitionStartTime = Date.now();
     this.enemyManager.clearEnemies();
-    this.player.heal(2); // 라운드 전환 시 체력 회복
+    this.bulletManager.clearBullets();
+    this.player.heal(2);
   }
 
   startNextRound() {
