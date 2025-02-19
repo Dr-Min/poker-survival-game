@@ -1049,50 +1049,82 @@ export class UI {
       const result = pokerSystem.getGameResult();
       if (result) {
         // 결과 표시 박스
-        const boxWidth = 400;
+        const boxWidth = 600;
         const boxHeight = 200;
         const boxX = (this.canvas.width - boxWidth) / 2;
         const boxY = (this.canvas.height - boxHeight) / 2;
 
-        // 반투명 배경
-        this.ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+        // 반투명 검은색 배경
+        this.ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
         this.ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
 
         // 테두리
         this.ctx.strokeStyle = "#FFD700";
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = 3;
         this.ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
-        // 결과 텍스트
-        this.ctx.fillStyle = "#ffffff";
+        // 승자 표시
+        this.ctx.font = "bold 32px Arial";
+        this.ctx.fillStyle = "#FFD700";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText(
+          result.winner === "player" ? "플레이어 승리!" : "보스 승리!",
+          this.canvas.width / 2,
+          boxY + 50
+        );
+
+        // 플레이어와 보스의 족보 표시
+        const playerHand = pokerSystem.calculateHandRank([
+          ...result.playerCards,
+          ...result.communityCards,
+        ]);
+        const bossHand = pokerSystem.calculateHandRank([
+          ...result.bossCards,
+          ...result.communityCards,
+        ]);
+
+        const getCardValueText = (value) => {
+          switch (value) {
+            case 14:
+              return "A";
+            case 13:
+              return "K";
+            case 12:
+              return "Q";
+            case 11:
+              return "J";
+            default:
+              return value.toString();
+          }
+        };
+
         this.ctx.font = "24px Arial";
         this.ctx.textAlign = "center";
 
-        // 승자 표시
-        const winnerText =
-          result.winner === "player" ? "플레이어 승리!" : "보스 승리!";
-        this.ctx.fillStyle = result.winner === "player" ? "#4CAF50" : "#ff4444";
-        this.ctx.fillText(winnerText, this.canvas.width / 2, boxY + 50);
+        // 결과 표시를 가로로 배치
+        const centerY = boxY + 100;
+        const spacing = 300; // 플레이어와 보스 텍스트 사이 간격
 
-        // 족보 표시
-        this.ctx.fillStyle = "#ffffff";
-        const playerHand = pokerSystem.calculateHandRank([
-          ...pokerSystem.playerCards,
-          ...pokerSystem.communityCards,
-        ]);
-        const bossHand = pokerSystem.calculateHandRank([
-          ...pokerSystem.bossCards,
-          ...pokerSystem.communityCards,
-        ]);
+        // 플레이어 결과 (밝은 하늘색으로 변경)
+        this.ctx.fillStyle = "#00FFFF";
         this.ctx.fillText(
-          `플레이어: ${playerHand.name}`,
-          this.canvas.width / 2,
-          boxY + 90
+          `플레이어: ${playerHand.name} (${getCardValueText(
+            playerHand.value
+          )})`,
+          this.canvas.width / 2 - spacing / 2,
+          centerY
         );
+
+        // VS 표시
+        this.ctx.fillStyle = "#FFFFFF";
+        this.ctx.fillText("VS", this.canvas.width / 2, centerY);
+
+        // 보스 결과 (밝은 주황색으로 변경)
+        this.ctx.fillStyle = "#FFA500";
         this.ctx.fillText(
-          `보스: ${bossHand.name}`,
-          this.canvas.width / 2,
-          boxY + 130
+          `보스: ${bossHand.name} (${getCardValueText(bossHand.value)})`,
+          this.canvas.width / 2 + spacing / 2,
+          centerY
         );
 
         // 보스전 시작 버튼
@@ -1103,9 +1135,18 @@ export class UI {
 
         this.ctx.fillStyle = "#4CAF50";
         this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
-        this.ctx.fillStyle = "#ffffff";
-        this.ctx.font = "24px Arial";
-        this.ctx.fillText("보스전 시작", this.canvas.width / 2, buttonY + 28);
+        this.ctx.strokeStyle = "#FFFFFF";
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+        this.ctx.font = "20px Arial";
+        this.ctx.fillStyle = "#FFFFFF";
+        this.ctx.textAlign = "center";
+        this.ctx.fillText(
+          "보스전 시작",
+          buttonX + buttonWidth / 2,
+          buttonY + 28
+        );
 
         // 버튼 영역 저장
         this.showdownConfirmButtonArea = {

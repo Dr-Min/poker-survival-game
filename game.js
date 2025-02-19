@@ -692,8 +692,9 @@ export class Game {
       this.isBossBattle = false;
       this.boss = null;
       this.isSpawningEnemies = true;
-    } else if (this.round % 2 === 0) {
-      // 짝수 라운드에서만 보스전 시작
+    } else if (this.round % 3 === 0) {
+      // 3의 배수 라운드에서 보스전 시작
+      // 보스전 시작
       this.startBossBattle();
     } else {
       this.isSpawningEnemies = true;
