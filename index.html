@@ -8,7 +8,7 @@
     />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="-1" />
-    <meta http-equiv="Cache" content="no-cache">
+    <meta http-equiv="Cache" content="no-cache" />
     <title>미니 뱀파이어 서바이벌</title>
     <meta
       name="viewport"
@@ -37,7 +37,12 @@
   </head>
   <body>
     <canvas id="gameCanvas" width="1200" height="800"></canvas>
-    <script src="game.js?v=5"></script>
+    <script type="module">
+      import { Game } from "./game.js";
+      window.onload = function () {
+        const game = new Game();
+      };
+    </script>
     <!-- 이미지 프리로드 -->
     <div style="display: none">
       <img src="player.png" id="playerImage" />
