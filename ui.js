@@ -226,7 +226,7 @@ export class UI {
             text = `- 폭발 효과`;
             break;
           case "bounceCount":
-            text = value > 0 ? `- ${value}회 바운스` : "";
+            text = value > 0 ? `- 도탄 강화` : "";
             break;
           case "explosionSize":
             text = value > 1 ? `- 폭발 범위 ${value}배` : "";
