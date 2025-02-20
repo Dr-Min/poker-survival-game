@@ -540,11 +540,12 @@ export class Game {
     }
 
     // 카드 관련 업데이트
-    const prevCardCount = this.cardManager.getCollectedCards().length;
+    const prevCards = JSON.stringify(this.cardManager.getCollectedCards());
     this.cardManager.updateCards(this.player, this.effects.getEffects());
+    const currentCards = JSON.stringify(this.cardManager.getCollectedCards());
 
-    // 카드가 변경되었을 때만 효과 재계산
-    if (prevCardCount !== this.cardManager.getCollectedCards().length) {
+    // 카드가 변경되었을 때 효과 재계산 (개수 변경 또는 카드 교체)
+    if (prevCards !== currentCards) {
       const result = this.effects.applyCardEffects(
         this.cardManager.getCollectedCards()
       );

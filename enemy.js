@@ -5,14 +5,15 @@ export class Enemy {
     this.id = Date.now() + Math.random();
     this.x = x;
     this.y = y;
-    this.size = 15;
-    this.speed = 1 * (1 + round * 0.1);
+    this.size = 20;
+    this.speed = 0.5 * (1 + round * 0.1);
     this.hp = 5 + Math.floor(round * 1.5);
     this.isDead = false;
     this.isAlly = false;
     this.stunEndTime = 0;
     this.hasDroppedCard = false;
     this.isCountedAsKill = false;
+    this.deathAnimationStarted = false;
 
     // 애니메이션 관련 속성 추가
     this.runSprite = new Image();
@@ -37,6 +38,13 @@ export class Enemy {
 
   update(player, now) {
     if (this.isDead) {
+      // 죽음 애니메이션 시작 시 초기화
+      if (!this.deathAnimationStarted) {
+        this.deathAnimationStarted = true;
+        this.frameIndex = 0;
+        this.tickCount = 0;
+      }
+
       // 이미 애니메이션이 완료된 경우
       if (this.deathAnimationComplete) {
         return false;
@@ -50,10 +58,10 @@ export class Enemy {
           this.frameIndex++;
         } else {
           this.deathAnimationComplete = true;
-          return false; // 애니메이션이 완료되면 즉시 false 반환
+          return false;
         }
       }
-      return true; // 애니메이션이 진행 중일 때는 true 반환
+      return true;
     }
 
     if (this.stunEndTime && now < this.stunEndTime) return true;
@@ -169,7 +177,7 @@ export class EnemyManager {
   spawnEnemy(canvas, round, isRoundTransition) {
     if (isRoundTransition || !this.game.isSpawningEnemies) return;
 
-    if (Math.random() < 0.008 * (1 + round * 0.08)) {
+    if (Math.random() < 0.005 * (1 + round * 0.05)) {
       const side = Math.floor(Math.random() * 4);
       let x, y;
 
