@@ -166,6 +166,10 @@ export class Game {
     window.addEventListener("keyup", (e) => this.handleKeyUp(e));
     this.canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
     this.canvas.addEventListener("click", (e) => this.handleClick(e));
+    this.canvas.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      this.handleRightClick(e);
+    });
     window.addEventListener("resize", this.handleResize);
   }
 
@@ -1013,6 +1017,20 @@ export class Game {
         this.selectedCards.push(card);
       }
     }
+  }
+
+  handleRightClick(e) {
+    if (this.isStartScreen || this.isPaused || this.isGameOver) return;
+
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    // 플레이어에게 대시 명령 전달
+    this.player.dash(x, y);
   }
 }
 

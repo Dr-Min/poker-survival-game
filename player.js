@@ -34,12 +34,38 @@ export class Player {
     this.currentCharge = 3; // 현재 충전량 (소수점으로 관리)
     this.lastChargeTime = Date.now(); // 마지막 충전 시간
 
-    // 플레이어 이미지 로드
-    this.image = new Image();
-    this.image.src = "player.png";
+    // 애니메이션 관련 속성
+    this.frameIndex = 0;
+    this.tickCount = 0;
+    this.ticksPerFrame = 6; // 100ms에 맞춰 조정
+    this.numberOfFrames = {
+      idle: 5, // idle 스프라이트 프레임 수
+      move: 4, // move 스프라이트 프레임 수
+    };
+    this.frameWidth = 32; // JSON에서 확인한 실제 프레임 크기
+    this.frameHeight = 32;
+    this.renderSize = 64; // 화면에 표시될 크기
+
+    // 스프라이트 이미지 로드
+    this.idelSprite = new Image();
+    this.idelSprite.src = "./sprite/player/Player_idel.png";
+    this.moveSprite = new Image();
+    this.moveSprite.src = "./sprite/player/Player_move.png";
+
+    this.currentSprite = this.idelSprite;
+    this.isMoving = false;
+    this.prevX = this.x;
+    this.prevY = this.y;
+    this.facingLeft = false; // 캐릭터가 왼쪽을 보고 있는지 확인
   }
 
   move(keys, mouseX, mouseY, joystick) {
+    this.prevX = this.x;
+    this.prevY = this.y;
+
+    // 마우스 방향에 따라 캐릭터 방향 설정 (반대로 수정)
+    this.facingLeft = mouseX > this.x;
+
     // 대시 충전 업데이트
     const now = Date.now();
     const deltaTime = (now - this.lastChargeTime) / 1000; // 초 단위로 변환
@@ -70,18 +96,44 @@ export class Player {
       if (distance > 5) {
         this.x += (dx / distance) * currentSpeed;
         this.y += (dy / distance) * currentSpeed;
+        this.isMoving = true;
+        this.currentSprite = this.moveSprite;
+        // 조이스틱 사용 시에도 마우스 방향 우선
+      } else {
+        this.isMoving = false;
+        this.currentSprite = this.idelSprite;
       }
     } else {
-      // 대시 중이면 대시 방향으로 이동
       if (this.isDashing) {
         this.x += this.dashDirection.x * currentSpeed;
         this.y += this.dashDirection.y * currentSpeed;
+        this.isMoving = true;
+        this.currentSprite = this.moveSprite;
+        // 대시 중에도 마우스 방향 우선
       } else {
-        // 일반 이동
-        if (keys["ArrowUp"] || keys["w"]) this.y -= currentSpeed;
-        if (keys["ArrowDown"] || keys["s"]) this.y += currentSpeed;
-        if (keys["ArrowLeft"] || keys["a"]) this.x -= currentSpeed;
-        if (keys["ArrowRight"] || keys["d"]) this.x += currentSpeed;
+        let dx = 0;
+        let dy = 0;
+
+        if (keys["ArrowUp"] || keys["w"]) dy -= 1;
+        if (keys["ArrowDown"] || keys["s"]) dy += 1;
+        if (keys["ArrowLeft"] || keys["a"]) dx -= 1;
+        if (keys["ArrowRight"] || keys["d"]) dx += 1;
+
+        if (dx !== 0 || dy !== 0) {
+          this.isMoving = true;
+          this.currentSprite = this.moveSprite;
+
+          if (dx !== 0 && dy !== 0) {
+            const length = Math.sqrt(dx * dx + dy * dy);
+            dx /= length;
+            dy /= length;
+          }
+          this.x += dx * currentSpeed;
+          this.y += dy * currentSpeed;
+        } else {
+          this.isMoving = false;
+          this.currentSprite = this.idelSprite;
+        }
       }
     }
 
@@ -96,8 +148,45 @@ export class Player {
     );
   }
 
+  dash(targetX, targetY) {
+    if (!this.canDash || this.isDashing || this.dashCharges <= 0) return;
+
+    this.isDashing = true;
+    this.canDash = false;
+    this.lastDashTime = Date.now();
+
+    // 대시 사용
+    this.currentCharge = Math.max(0, this.currentCharge - 1);
+    this.dashCharges = Math.floor(this.currentCharge);
+
+    // 대시 방향 계산 (마우스 포인터 방향으로)
+    const angle = Math.atan2(targetY - this.y, targetX - this.x);
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+
+    this.dashDirection = { x: dx, y: dy };
+
+    // 대시 종료
+    setTimeout(() => {
+      this.isDashing = false;
+    }, this.dashDuration);
+
+    // 개별 대시 쿨다운
+    setTimeout(() => {
+      this.canDash = true;
+    }, this.dashCooldown);
+
+    // 대시 충전 시스템
+    if (this.dashRechargeTimer) clearTimeout(this.dashRechargeTimer);
+
+    this.dashRechargeTimer = setTimeout(() => {
+      this.dashCharges = this.maxDashCharges;
+      this.lastChargeTime = Date.now();
+    }, this.dashRechargeTime);
+  }
+
   startDash(keys) {
-    if (this.dashCharges <= 0) return;
+    if (!this.canDash || this.isDashing || this.dashCharges <= 0) return;
 
     this.isDashing = true;
     this.canDash = false;
@@ -148,13 +237,12 @@ export class Player {
     if (this.dashRechargeTimer) clearTimeout(this.dashRechargeTimer);
 
     this.dashRechargeTimer = setTimeout(() => {
-      this.dashCharges = this.maxDashCharges; // 5초 후 모든 대시 횟수 회복
+      this.dashCharges = this.maxDashCharges;
       this.lastChargeTime = Date.now();
     }, this.dashRechargeTime);
   }
 
   draw(ctx, mouseX, mouseY) {
-    // 마우스 위치 저장
     this.lastMouseX = mouseX;
     this.lastMouseY = mouseY;
 
@@ -171,20 +259,32 @@ export class Player {
         ctx.fill();
       }
 
-      // 대시 게이지 배경
+      // 애니메이션 프레임 업데이트
+      this.tickCount++;
+      if (this.tickCount > this.ticksPerFrame) {
+        this.tickCount = 0;
+        const maxFrames = this.isMoving
+          ? this.numberOfFrames.move
+          : this.numberOfFrames.idle;
+        this.frameIndex = (this.frameIndex + 1) % maxFrames;
+      }
+
+      // 대시 게이지 그리기
       const gaugeWidth = 30;
       const gaugeHeight = 4;
-      const gaugeY = -this.size - 10;
+      const gaugeY = -this.renderSize / 2 - 10;
+
+      // 게이지 배경
       ctx.fillStyle = "#333333";
       ctx.fillRect(-gaugeWidth / 2, gaugeY, gaugeWidth, gaugeHeight);
 
-      // 대시 게이지 (연속적으로 차오름)
+      // 게이지 바
       const chargeRatio = this.currentCharge / this.maxDashCharges;
       const chargeWidth = gaugeWidth * chargeRatio;
       ctx.fillStyle = "#4a90e2";
       ctx.fillRect(-gaugeWidth / 2, gaugeY, chargeWidth, gaugeHeight);
 
-      // 사용 가능한 대시 횟수 표시
+      // 대시 포인트
       for (let i = 0; i < this.maxDashCharges; i++) {
         const isCharged = i < this.dashCharges;
         const x =
@@ -196,15 +296,26 @@ export class Player {
         ctx.fill();
       }
 
-      const angle = Math.atan2(mouseY - this.y, mouseX - this.x);
-      ctx.rotate(angle);
-      ctx.drawImage(
-        this.image,
-        -this.size / 2,
-        -this.size / 2,
-        this.size,
-        this.size
-      );
+      // 캐릭터 좌우 반전을 위한 설정
+      if (this.facingLeft) {
+        ctx.scale(-1, 1);
+      }
+
+      // 스프라이트 그리기
+      if (this.currentSprite.complete) {
+        ctx.drawImage(
+          this.currentSprite,
+          this.frameIndex * this.frameWidth,
+          0,
+          this.frameWidth,
+          this.frameHeight,
+          -this.renderSize / 2,
+          -this.renderSize / 2,
+          this.renderSize,
+          this.renderSize
+        );
+      }
+
       ctx.restore();
     }
   }

@@ -92,7 +92,6 @@ class BaseBullet {
     }
 
     if (this.cardImage && this.cardImage.complete) {
-      // 카드 이미지의 회전
       ctx.save();
       ctx.translate(this.x, this.y);
       const angle = Math.atan2(this.speedY, this.speedX) + Math.PI / 2;
@@ -102,13 +101,13 @@ class BaseBullet {
       const imageRatio = this.cardImage.width / this.cardImage.height;
       let drawWidth, drawHeight;
 
-      // 총알 크기(this.size)를 기준으로 비율 유지하며 크기 조정
+      // 총알 크기 조정 (가로 30% 감소, 세로 5% 감소)
       if (imageRatio > 1) {
-        drawWidth = this.size * 3.5;
-        drawHeight = drawWidth / imageRatio;
+        drawWidth = this.size * 2.45; // 3.5 * 0.7 = 2.45 (30% 감소)
+        drawHeight = (drawWidth / imageRatio) * 0.95; // 세로 5% 감소
       } else {
-        drawHeight = this.size * 3.5;
-        drawWidth = drawHeight * imageRatio;
+        drawHeight = this.size * 3.325; // 3.5 * 0.95 = 3.325 (5% 감소)
+        drawWidth = drawHeight * imageRatio * 0.7; // 가로 30% 감소
       }
 
       ctx.drawImage(

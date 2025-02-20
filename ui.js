@@ -8,6 +8,15 @@ export class UI {
     this.damageTexts = [];
     this.cardBackImage = new Image();
     this.cardBackImage.src = "V2_4x/PixelPlebes_V2_4x__53.png";
+    this.weaponSprite = new Image();
+    this.weaponSprite.src = "sprite/guns.png";
+
+    // 무기 스프라이트 관련 속성 수정
+    this.weaponAnimationFrame = 0;
+    this.weaponFrameCount = 10; // 총 10개의 프레임 (0-9)
+    this.lastAnimationTime = Date.now();
+    this.frameInterval = 100; // 100ms per frame (from guns.json)
+
     this.preloadAllCardImages();
   }
 
@@ -59,7 +68,7 @@ export class UI {
       player,
       effects,
       collectedCards,
-      boss, // 보스 정보 추가
+      boss,
     } = gameState;
     const now = Date.now();
 
@@ -98,6 +107,33 @@ export class UI {
     this.ctx.font = "20px Arial";
     this.ctx.fillText(`무기: ${currentWeapon.name}`, 20, 160);
     this.ctx.fillText(`공격력: ${currentWeapon.damage}`, 20, 190);
+
+    // 무기 스프라이트 표시
+    if (this.weaponSprite.complete) {
+      const weaponIndex = this.getWeaponSpriteIndex(
+        currentWeapon.pokerHand || "하이카드"
+      );
+      const spriteWidth = 32; // from guns.json
+      const spriteHeight = 16; // from guns.json
+      const scale = 2;
+
+      // 스프라이트 위치 계산
+      const frameX = weaponIndex * spriteWidth;
+      const frameY = 0; // 모든 프레임이 y=0에 있음
+
+      // 무기 스프라이트 그리기
+      this.ctx.drawImage(
+        this.weaponSprite,
+        frameX,
+        frameY,
+        spriteWidth,
+        spriteHeight,
+        250, // x 위치
+        155, // y 위치
+        spriteWidth * scale,
+        spriteHeight * scale
+      );
+    }
 
     // 체력바 그리기
     this.drawHealthBar(player);
@@ -1363,5 +1399,21 @@ export class UI {
       width: buttonWidth,
       height: buttonHeight,
     };
+  }
+
+  getWeaponSpriteIndex(weaponName) {
+    const weaponIndices = {
+      하이카드: 0,
+      원페어: 1,
+      투페어: 2,
+      트리플: 3,
+      스트레이트: 4,
+      플러시: 5,
+      풀하우스: 6,
+      포카드: 7,
+      "스트레이트 플러시": 8,
+      "로열 스트레이트 플러시": 9,
+    };
+    return weaponIndices[weaponName] || 0;
   }
 }
