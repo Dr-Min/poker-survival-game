@@ -1,6 +1,6 @@
 import { Player } from "./player.js";
 import { BulletManager } from "./bullet.js";
-import { EnemyManager } from "./enemy.js";
+import { EnemyManager } from "./enemies/index.js";
 import { CardManager } from "./card.js";
 import { Effects } from "./effects.js";
 import { UI } from "./ui.js";
@@ -596,9 +596,9 @@ export class Game {
 
     // 게임 요소 그리기
     this.player.draw(this.ctx, this.mouseX, this.mouseY);
+    this.cardManager.drawCards(this.ctx);
     this.enemyManager.drawEnemies(this.ctx);
     this.bulletManager.drawBullets(this.ctx);
-    this.cardManager.drawCards(this.ctx);
 
     // 보스 그리기 (보스전일 때만)
     if (this.isBossBattle && this.boss) {
