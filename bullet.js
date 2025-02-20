@@ -352,15 +352,16 @@ export class BulletManager {
 
     if (selectedCards) {
       if (selectedCards.type === "twoPair") {
-        // 투페어인 경우 각 페어에서 랜덤 선택
         const pairIndex = Math.floor(Math.random() * 2);
         const selectedPair = selectedCards.pairs[pairIndex];
         cardInfo = this.getRandomCard(selectedPair);
       } else {
-        // 그 외의 경우
         cardInfo = this.getRandomCard(selectedCards.cards);
       }
     }
+
+    // 스페이드 효과에 따른 관통 여부 결정
+    const shouldPierce = effects && effects.spade && effects.spade.count >= 1;
 
     const bullet = new BaseBullet(
       x,
@@ -369,7 +370,7 @@ export class BulletManager {
       dy,
       size,
       damage,
-      isPiercing,
+      shouldPierce,
       color,
       cardInfo
     );
@@ -451,7 +452,6 @@ export class BulletManager {
     this.createBullet({
       ...config,
       size: 3,
-      isPiercing: true,
       color: "#00ffff",
     });
   }
@@ -470,7 +470,6 @@ export class BulletManager {
         dy: rotatedDy,
         size: 4,
         damage: config.damage * 0.5,
-        isPiercing: false,
         color: "#ffff00",
       });
     }
@@ -478,7 +477,6 @@ export class BulletManager {
     this.createBullet({
       ...config,
       size: 6,
-      isPiercing: false,
       color: "#ffff00",
     });
   }
@@ -487,7 +485,6 @@ export class BulletManager {
     this.createBullet({
       ...config,
       size: 12,
-      isPiercing: false,
       color: "#ff00ff",
     });
   }
@@ -499,7 +496,6 @@ export class BulletManager {
           this.createBullet({
             ...config,
             size: 8,
-            isPiercing: false,
             color: "#ff4400",
           });
         }
@@ -520,7 +516,6 @@ export class BulletManager {
         dy: rotatedDy,
         size: 4,
         damage: config.damage * 0.5,
-        isPiercing: true,
         color: "#ff0000",
       });
     }
@@ -535,7 +530,6 @@ export class BulletManager {
         dy: Math.sin(angle),
         size: 6,
         damage: config.damage * 0.8,
-        isPiercing: true,
         color: "#ffff00",
       });
     }
@@ -641,8 +635,7 @@ export class BulletManager {
   calculateDamage(bullet, enemy, effects) {
     let finalDamage = bullet.damage;
 
-    if (effects.spade.count >= 1) finalDamage *= 1.25;
-    if (effects.spade.count >= 2 && bullet.isPiercing) finalDamage *= 1.15;
+    if (effects.spade.count >= 2) finalDamage *= 1.5;
     if (effects.spade.count >= 3 && Math.random() < 0.3) finalDamage *= 2;
     if (effects.diamond.count >= 4) finalDamage *= 1.3;
 

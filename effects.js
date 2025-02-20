@@ -56,10 +56,10 @@ export class Effects {
 
     // 스페이드 효과 적용
     if (cardCounts.spade >= 1) {
-      this.effects.spade.damageIncrease = 0.25;
+      this.effects.spade.penetrationDamage = 1;
     }
     if (cardCounts.spade >= 2) {
-      this.effects.spade.penetrationDamage = 0.15;
+      this.effects.spade.damageIncrease = 0.5;
     }
     if (cardCounts.spade >= 3) {
       this.effects.spade.criticalChance = 0.3;

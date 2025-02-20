@@ -3,7 +3,7 @@ import { BaseEnemy } from "./BaseEnemy.js";
 export class TwoLegsEnemy extends BaseEnemy {
   constructor(x, y, round) {
     super(x, y, round);
-    this.size = 26;
+    this.size = 20;
     this.renderSize = 83;
     this.speed = 0.5 * (1 + round * 0.1);
     this.hp = 5 + Math.floor(round * 1.5);
