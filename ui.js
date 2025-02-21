@@ -353,43 +353,81 @@ export class UI {
   }
 
   drawPauseScreen() {
-    this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; // 배경 더 어둡게
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    const ctx = this.canvas.getContext("2d");
 
-    // 일시정지 메시지
-    this.ctx.fillStyle = "white";
-    this.ctx.font = "48px Arial";
-    this.ctx.textAlign = "center";
-    this.ctx.fillText("일시정지", this.canvas.width / 2, 100);
+    // 반투명 배경
+    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // 디버그 모드 UI
-    this.ctx.font = "24px Arial";
-    this.ctx.fillText("디버그 모드 - 카드 선택", this.canvas.width / 2, 160);
+    // 일시정지 텍스트
+    ctx.fillStyle = "#fff";
+    ctx.font = "30px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      "일시정지",
+      this.canvas.width / 2,
+      this.canvas.height / 2 - 50
+    );
 
     // 보스전 진입 버튼
-    const bossButtonWidth = 200;
-    const bossButtonHeight = 50;
-    const bossButtonX = (this.canvas.width - bossButtonWidth) / 2;
-    const bossButtonY = 500;
+    const bossButtonX = this.canvas.width / 2 - 100;
+    const bossButtonY = this.canvas.height / 2;
+    const buttonWidth = 200;
+    const buttonHeight = 40;
 
-    this.ctx.fillStyle = "#ff4444";
-    this.ctx.fillRect(
-      bossButtonX,
-      bossButtonY,
-      bossButtonWidth,
-      bossButtonHeight
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.fillRect(bossButtonX, bossButtonY, buttonWidth, buttonHeight);
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(bossButtonX, bossButtonY, buttonWidth, buttonHeight);
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      "보스전 진입",
+      bossButtonX + buttonWidth / 2,
+      bossButtonY + 28
     );
-    this.ctx.fillStyle = "white";
-    this.ctx.fillText("보스전 진입", this.canvas.width / 2, bossButtonY + 32);
 
-    // 보스전 버튼 영역 저장
+    // 폭발 테스트 버튼
+    const explosionButtonX = this.canvas.width / 2 - 100;
+    const explosionButtonY = this.canvas.height / 2 + 50;
+
+    ctx.fillStyle = "rgba(255, 0, 0, 0.7)";
+    ctx.fillRect(explosionButtonX, explosionButtonY, buttonWidth, buttonHeight);
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(
+      explosionButtonX,
+      explosionButtonY,
+      buttonWidth,
+      buttonHeight
+    );
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      "폭발 테스트",
+      explosionButtonX + buttonWidth / 2,
+      explosionButtonY + 28
+    );
+
+    // 버튼 영역 저장
     this.bossButtonArea = {
       x: bossButtonX,
       y: bossButtonY,
-      width: bossButtonWidth,
-      height: bossButtonHeight,
+      width: buttonWidth,
+      height: buttonHeight,
     };
 
+    this.explosionButtonArea = {
+      x: explosionButtonX,
+      y: explosionButtonY,
+      width: buttonWidth,
+      height: buttonHeight,
+    };
+
+    // 디버그 카드 선택 UI
+    this.drawDebugCardSelection();
+  }
+
+  drawDebugCardSelection() {
     // 카드 타입과 숫자 선택 UI
     const types = ["스페이드", "하트", "다이아", "클로버"];
     const numbers = [
@@ -1415,5 +1453,76 @@ export class UI {
       "로열 스트레이트 플러시": 9,
     };
     return weaponIndices[weaponName] || 0;
+  }
+
+  drawGameOverScreen(gameState) {
+    // 반투명 배경 그라데이션
+    const gradient = this.ctx.createRadialGradient(
+      this.canvas.width / 2,
+      this.canvas.height / 2,
+      0,
+      this.canvas.width / 2,
+      this.canvas.height / 2,
+      this.canvas.width / 2
+    );
+    gradient.addColorStop(0, "rgba(0, 0, 0, 0.85)");
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0.95)");
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 게임 오버 텍스트
+    this.ctx.fillStyle = "#ff4444";
+    this.ctx.font = "bold 64px Arial";
+    this.ctx.textAlign = "center";
+    this.ctx.fillText(
+      "게임 오버",
+      this.canvas.width / 2,
+      this.canvas.height / 3
+    );
+
+    // 점수 표시
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "32px Arial";
+    this.ctx.fillText(
+      `최종 점수: ${gameState.score}`,
+      this.canvas.width / 2,
+      this.canvas.height / 2 - 40
+    );
+    this.ctx.fillText(
+      `도달 라운드: ${gameState.round}`,
+      this.canvas.width / 2,
+      this.canvas.height / 2 + 10
+    );
+
+    // 수집한 카드 표시
+    this.ctx.font = "24px Arial";
+    this.ctx.fillText(
+      "수집한 카드",
+      this.canvas.width / 2,
+      this.canvas.height / 2 + 80
+    );
+
+    // 카드 그리기
+    const cardWidth = 80;
+    const cardHeight = 120;
+    const cardSpacing = 20;
+    const totalCardsWidth =
+      (cardWidth + cardSpacing) * gameState.cards.length - cardSpacing;
+    let startX = (this.canvas.width - totalCardsWidth) / 2;
+    const startY = this.canvas.height / 2 + 100;
+
+    gameState.cards.forEach((card) => {
+      this.drawCard(card, startX, startY, false);
+      startX += cardWidth + cardSpacing;
+    });
+
+    // 재시작 안내
+    this.ctx.fillStyle = "#aaaaaa";
+    this.ctx.font = "20px Arial";
+    this.ctx.fillText(
+      "새 게임을 시작하려면 페이지를 새로고침하세요",
+      this.canvas.width / 2,
+      this.canvas.height - 50
+    );
   }
 }

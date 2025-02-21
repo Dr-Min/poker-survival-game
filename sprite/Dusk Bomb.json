@@ -1,0 +1,36 @@
+{ "frames": {
+   "Dusk Bomb #Bomb 0.aseprite": {
+    "frame": { "x": 0, "y": 0, "w": 32, "h": 37 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 32, "h": 37 },
+    "sourceSize": { "w": 32, "h": 37 },
+    "duration": 100
+   },
+   "Dusk Bomb #Bomb 1.aseprite": {
+    "frame": { "x": 32, "y": 0, "w": 32, "h": 37 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 32, "h": 37 },
+    "sourceSize": { "w": 32, "h": 37 },
+    "duration": 100
+   }
+ },
+ "meta": {
+  "app": "https://www.aseprite.org/",
+  "version": "1.3.12-x64",
+  "image": "Dusk Bomb.png",
+  "format": "RGBA8888",
+  "size": { "w": 64, "h": 37 },
+  "scale": "1",
+  "frameTags": [
+   { "name": "Bomb", "from": 0, "to": 1, "direction": "forward", "color": "#000000ff" },
+   { "name": "Explode", "from": 2, "to": 9, "direction": "forward", "color": "#000000ff" }
+  ],
+  "layers": [
+   { "name": "Layer 1", "opacity": 255, "blendMode": "normal" }
+  ],
+  "slices": [
+  ]
+ }
+}

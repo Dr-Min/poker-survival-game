@@ -57,6 +57,15 @@ export class Player {
     this.prevX = this.x;
     this.prevY = this.y;
     this.facingLeft = false; // 캐릭터가 왼쪽을 보고 있는지 확인
+
+    // 히트 애니메이션 관련 속성 추가
+    this.hitSprite = new Image();
+    this.hitSprite.src = "./sprite/player/Player_hit.png";
+    this.isHit = false;
+    this.hitFrameIndex = 0;
+    this.hitFrameDuration = 100; // json 파일 기준 duration
+    this.hitLastFrameTime = 0;
+    this.hitFrames = 2; // json 파일 기준 프레임 수
   }
 
   move(keys, mouseX, mouseY, joystick) {
@@ -301,11 +310,21 @@ export class Player {
         ctx.scale(-1, 1);
       }
 
-      // 스프라이트 그리기
-      if (this.currentSprite.complete) {
+      // 히트 애니메이션 업데이트
+      if (this.isHit) {
+        const now = Date.now();
+        if (now - this.hitLastFrameTime > this.hitFrameDuration) {
+          this.hitFrameIndex = (this.hitFrameIndex + 1) % this.hitFrames;
+          this.hitLastFrameTime = now;
+        }
+      }
+
+      // 스프라이트 그리기 (히트 상태일 때는 히트 스프라이트 사용)
+      const sprite = this.isHit ? this.hitSprite : this.currentSprite;
+      if (sprite.complete) {
         ctx.drawImage(
-          this.currentSprite,
-          this.frameIndex * this.frameWidth,
+          sprite,
+          (this.isHit ? this.hitFrameIndex : this.frameIndex) * this.frameWidth,
           0,
           this.frameWidth,
           this.frameHeight,
@@ -325,8 +344,14 @@ export class Player {
       this.hp -= amount;
       this.invincible = true;
 
+      // 히트 애니메이션 시작
+      this.isHit = true;
+      this.hitFrameIndex = 0;
+      this.hitLastFrameTime = Date.now();
+
       setTimeout(() => {
         this.invincible = false;
+        this.isHit = false;
       }, this.invincibleTime);
 
       return this.hp <= 0;

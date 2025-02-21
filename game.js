@@ -162,42 +162,51 @@ export class Game {
   };
 
   setupEventListeners() {
-    window.addEventListener("keydown", (e) => this.handleKeyDown(e));
-    window.addEventListener("keyup", (e) => this.handleKeyUp(e));
+    // 키 이벤트
+    window.addEventListener("keydown", (e) => {
+      e.preventDefault(); // 기본 동작 방지
+      this.handleKeyDown(e);
+    });
+    window.addEventListener("keyup", (e) => {
+      e.preventDefault(); // 기본 동작 방지
+      this.handleKeyUp(e);
+    });
+
+    // 마우스 이벤트
     this.canvas.addEventListener("mousemove", (e) => this.handleMouseMove(e));
     this.canvas.addEventListener("click", (e) => this.handleClick(e));
     this.canvas.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       this.handleRightClick(e);
     });
+
+    // 리사이즈 이벤트
     window.addEventListener("resize", this.handleResize);
   }
 
   handleKeyDown(e) {
-    this.keys[e.key] = true;
+    if (this.isStartScreen || this.isGameOver) return;
+
+    this.keys[e.key.toLowerCase()] = true; // 소문자로 통일
+
     if (e.key === "Escape") {
       this.isPaused = !this.isPaused;
     }
+
     if (this.isPaused && e.key === "Enter") {
       const cardInfo = this.ui.getDebugCardInfo();
       if (cardInfo) {
-        // 카드 매니저를 통해 카드 생성 및 수집
         const card = this.cardManager.createCard(
           cardInfo.type,
           cardInfo.number
         );
         this.cardManager.collectCard(card.type, card.number);
-
-        // 카드 효과 즉시 적용
         const result = this.effects.applyCardEffects(
           this.cardManager.getCollectedCards()
         );
-        // 무기가 변경되었다면 현재 무기 업데이트
         if (result.weaponChanged) {
           this.currentWeapon = result.currentWeapon;
         }
-
-        // 카드 선택 초기화
         this.ui.selectedType = null;
         this.ui.selectedNumber = null;
       }
@@ -205,7 +214,8 @@ export class Game {
   }
 
   handleKeyUp(e) {
-    this.keys[e.key] = false;
+    if (this.isStartScreen || this.isGameOver) return;
+    this.keys[e.key.toLowerCase()] = false; // 소문자로 통일
   }
 
   handleMouseMove(e) {
@@ -353,6 +363,22 @@ export class Game {
         this.startBossBattle();
         return;
       }
+
+      // 폭발 테스트 버튼 클릭 체크
+      const explosionButtonArea = this.ui.explosionButtonArea;
+      if (
+        explosionButtonArea &&
+        x >= explosionButtonArea.x &&
+        x <= explosionButtonArea.x + explosionButtonArea.width &&
+        y >= explosionButtonArea.y &&
+        y <= explosionButtonArea.y + explosionButtonArea.height
+      ) {
+        if (this.boss) {
+          this.boss.testExplosion();
+        }
+        return;
+      }
+
       this.ui.handleDebugClick(x, y);
     } else {
       this.shoot();
@@ -897,6 +923,22 @@ export class Game {
         this.startMultiAttack(attack);
         this.boss.addAttackEffect("multi", this.player);
         break;
+
+      case "cross":
+        // 십자 레이저: 십자 모양의 광선 공격
+        this.startCrossAttack(attack);
+        this.boss.addAttackEffect("cross", this.player);
+        break;
+
+      case "circular":
+        // 원형 탄막: 360도 방향으로 탄막 발사
+        this.startCircularAttack(attack);
+        this.boss.addAttackEffect("circular", this.player);
+        break;
+
+      case "bomb":
+        // 폭탄 공격은 보스 클래스 내부에서 처리됨
+        break;
     }
   }
 
@@ -924,6 +966,95 @@ export class Game {
 
       count++;
     }, attack.interval);
+  }
+
+  startCrossAttack(attack) {
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      if (
+        Date.now() - startTime >= attack.duration ||
+        !this.boss ||
+        this.boss.isDead
+      ) {
+        clearInterval(interval);
+        this.boss.isAttacking = false;
+        return;
+      }
+
+      // 가로선 충돌 체크
+      if (Math.abs(this.player.y - this.boss.y) <= attack.width / 2) {
+        this.player.takeDamage(attack.damage / 10);
+        this.ui.addDamageText(
+          this.player.x,
+          this.player.y,
+          attack.damage / 10,
+          "#ff0000"
+        );
+      }
+
+      // 세로선 충돌 체크
+      if (Math.abs(this.player.x - this.boss.x) <= attack.width / 2) {
+        this.player.takeDamage(attack.damage / 10);
+        this.ui.addDamageText(
+          this.player.x,
+          this.player.y,
+          attack.damage / 10,
+          "#ff0000"
+        );
+      }
+    }, 100);
+  }
+
+  startCircularAttack(attack) {
+    for (let i = 0; i < attack.bulletCount; i++) {
+      const angle = (i * Math.PI * 2) / attack.bulletCount;
+      const dx = Math.cos(angle);
+      const dy = Math.sin(angle);
+
+      // 원형으로 퍼지는 탄막 생성
+      setTimeout(() => {
+        if (!this.boss || this.boss.isDead) return;
+
+        const bulletSpeed = 3;
+        const bullet = {
+          x: this.boss.x,
+          y: this.boss.y,
+          dx: dx * bulletSpeed,
+          dy: dy * bulletSpeed,
+          damage: attack.damage,
+          size: 8,
+          duration: 2000,
+          startTime: Date.now(),
+        };
+
+        const bulletInterval = setInterval(() => {
+          if (Date.now() - bullet.startTime >= bullet.duration) {
+            clearInterval(bulletInterval);
+            return;
+          }
+
+          bullet.x += bullet.dx;
+          bullet.y += bullet.dy;
+
+          // 플레이어와의 충돌 체크
+          const distToPlayer = Math.sqrt(
+            Math.pow(this.player.x - bullet.x, 2) +
+              Math.pow(this.player.y - bullet.y, 2)
+          );
+
+          if (distToPlayer < (this.player.size + bullet.size) / 2) {
+            this.player.takeDamage(bullet.damage);
+            this.ui.addDamageText(
+              this.player.x,
+              this.player.y,
+              bullet.damage,
+              "#ff0000"
+            );
+            clearInterval(bulletInterval);
+          }
+        }, 16);
+      }, i * 50); // 탄막이 순차적으로 발사되도록 지연
+    }
   }
 
   // 보스전 결과 체크
