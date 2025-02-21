@@ -83,6 +83,7 @@ export class Game {
       cardTypes: ["spade", "heart", "diamond", "clover"],
       cardNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
       ricochetChance: 1.0,
+      showHitboxes: false, // 히트박스 표시 여부
     };
 
     // 보스전 관련 상태 추가
@@ -625,14 +626,14 @@ export class Game {
     }
 
     // 게임 요소 그리기
-    this.player.draw(this.ctx, this.mouseX, this.mouseY);
+    this.player.draw(this.ctx, this.debugOptions.showHitboxes);
     this.cardManager.drawCards(this.ctx);
     this.enemyManager.drawEnemies(this.ctx);
     this.bulletManager.drawBullets(this.ctx);
 
     // 보스 그리기 (보스전일 때만)
     if (this.isBossBattle && this.boss) {
-      this.boss.draw(this.ctx);
+      this.boss.draw(this.ctx, this.debugOptions.showHitboxes);
     }
 
     // UI에 수집된 카드 정보 전달
@@ -650,6 +651,7 @@ export class Game {
       effects: this.effects.getEffects(),
       collectedCards: this.cardManager.getCollectedCards(),
       boss: this.isBossBattle ? this.boss : null,
+      showHitboxes: this.debugOptions.showHitboxes,
     });
 
     if (this.isPaused) {
@@ -790,6 +792,25 @@ export class Game {
   startPokerPhase() {
     this.isShowingCommunityCards = false;
     this.isPokerPhase = true;
+
+    // 카드가 없는 경우 랜덤 카드 2장 지급
+    if (!this.cardManager.getCollectedCards().length) {
+      const types = ["spade", "heart", "diamond", "clover"];
+      for (let i = 0; i < 2; i++) {
+        const type = types[Math.floor(Math.random() * types.length)];
+        const number = Math.floor(Math.random() * 13) + 1;
+        this.cardManager.collectCard(type, number);
+      }
+
+      // 카드 효과 재계산
+      const result = this.effects.applyCardEffects(
+        this.cardManager.getCollectedCards()
+      );
+      if (result.weaponChanged) {
+        this.currentWeapon = result.currentWeapon;
+      }
+    }
+
     this.initializePokerRound();
   }
 

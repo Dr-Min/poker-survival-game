@@ -18,6 +18,40 @@ export class UI {
     this.frameInterval = 100; // 100ms per frame (from guns.json)
 
     this.preloadAllCardImages();
+
+    this.debugContainer = document.createElement("div");
+    this.debugContainer.style.position = "fixed";
+    this.debugContainer.style.top = "10px";
+    this.debugContainer.style.right = "10px";
+    this.debugContainer.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+    this.debugContainer.style.padding = "10px";
+    this.debugContainer.style.borderRadius = "5px";
+    this.debugContainer.style.display = "none";
+    document.body.appendChild(this.debugContainer);
+
+    // 히트박스 토글 버튼 추가
+    const hitboxButton = document.createElement("button");
+    hitboxButton.textContent = "히트박스 OFF";
+    hitboxButton.style.marginRight = "10px";
+    hitboxButton.style.padding = "5px 10px";
+    hitboxButton.style.backgroundColor = "#666";
+    hitboxButton.style.color = "white";
+    hitboxButton.style.border = "none";
+    hitboxButton.style.borderRadius = "3px";
+    hitboxButton.style.cursor = "pointer";
+
+    hitboxButton.addEventListener("click", () => {
+      this.game.debugOptions.showHitboxes =
+        !this.game.debugOptions.showHitboxes;
+      hitboxButton.textContent = `히트박스 ${
+        this.game.debugOptions.showHitboxes ? "ON" : "OFF"
+      }`;
+      hitboxButton.style.backgroundColor = this.game.debugOptions.showHitboxes
+        ? "#4CAF50"
+        : "#666";
+    });
+
+    this.debugContainer.appendChild(hitboxButton);
   }
 
   async preloadAllCardImages() {

@@ -577,27 +577,31 @@ export class BulletManager {
     // 보스와의 충돌 체크
     if (this.game && this.game.isBossBattle && this.game.boss) {
       const boss = this.game.boss;
-      const dx = bullet.x - boss.x;
-      const dy = bullet.y - boss.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      // 이미 보스에게 맞은 총알인지 확인
+      if (!bullet.hitEnemies.includes(boss.id)) {
+        const dx = bullet.x - boss.x;
+        const dy = bullet.y - boss.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (distance < (bullet.size + boss.size) / 2) {
-        // 데미지 계산 및 적용
-        const finalDamage = this.calculateDamage(bullet, boss, effects);
-        boss.takeDamage(finalDamage);
+        if (distance < (bullet.size + boss.size) / 2) {
+          // 데미지 계산 및 적용
+          const finalDamage = this.calculateDamage(bullet, boss, effects);
+          boss.takeDamage(finalDamage);
+          bullet.hitEnemies.push(boss.id); // 보스 ID를 맞은 목록에 추가
 
-        // 데미지 텍스트 표시
-        if (this.ui) {
-          this.ui.addDamageText(
-            boss.x,
-            boss.y - boss.size,
-            finalDamage,
-            "#ff0000"
-          );
+          // 데미지 텍스트 표시
+          if (this.ui) {
+            this.ui.addDamageText(
+              boss.x,
+              boss.y - boss.size,
+              finalDamage,
+              "#ff0000"
+            );
+          }
+
+          hasHit = !bullet.isPiercing;
+          return hasHit;
         }
-
-        hasHit = !bullet.isPiercing;
-        return hasHit;
       }
     }
 
