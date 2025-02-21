@@ -360,27 +360,43 @@ export class UI {
   }
 
   addDamageText(x, y, damage, color = "#ffffff") {
+    // 데미지 값을 정수로 반올림하여 정확한 값 표시
+    const roundedDamage = Math.round(damage * 10) / 10;
+    
     this.damageTexts.push({
-      x,
-      y,
-      damage: Math.round(damage * 10) / 10,
-      color,
-      createdTime: Date.now(),
-      velocity: -2,
+      x: x,
+      y: y - 30, // 캐릭터 위에 표시되도록 Y 좌표 조정
+      damage: roundedDamage,
+      color: color,
+      alpha: 1.0,
+      offsetY: 0,
+      createdAt: Date.now()
     });
   }
 
   updateDamageTexts() {
     const now = Date.now();
-    this.damageTexts = this.damageTexts.filter((text) => {
-      const age = now - text.createdTime;
-      if (age > 1000) return false;
+    
+    // 기존 데미지 텍스트 배열 업데이트
+    this.damageTexts = this.damageTexts.filter(text => {
+      const age = now - text.createdAt;
+      if (age > 1000) return false; // 1초 후 제거
 
-      text.y += text.velocity;
+      // 텍스트 위치와 투명도 업데이트
+      text.offsetY -= 0.5; // 천천히 위로 올라가도록 속도 조정
+      text.alpha = 1 - (age / 1000); // 점점 투명해지는 효과
+
+      // 텍스트 렌더링
+      this.ctx.save();
       this.ctx.fillStyle = text.color;
-      this.ctx.font = "bold 20px Arial";
+      this.ctx.globalAlpha = text.alpha;
+      this.ctx.font = "bold 24px Arial"; // 폰트 크기 증가
       this.ctx.textAlign = "center";
-      this.ctx.fillText(text.damage, text.x, text.y);
+      this.ctx.strokeStyle = "#000000"; // 테두리 추가
+      this.ctx.lineWidth = 3;
+      this.ctx.strokeText(text.damage.toFixed(1), text.x, text.y + text.offsetY);
+      this.ctx.fillText(text.damage.toFixed(1), text.x, text.y + text.offsetY);
+      this.ctx.restore();
 
       return true;
     });

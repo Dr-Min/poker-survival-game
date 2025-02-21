@@ -22,6 +22,18 @@ export class BaseEnemy {
     this.deathFrames = 9;
     this.renderSize = 64;
     this.deathAnimationComplete = false;
+
+    this.isAttacking = false;
+    this.attackDamage = 1;
+    this.attackCooldown = 1000; // 1초
+    this.lastAttackTime = 0;
+    this.attackAnimationStarted = false;
+    this.attackFrameIndex = 0;
+    this.attackTickCount = 0;
+    this.attackTicksPerFrame = 5;
+    this.attackFrames = 0; // 자식 클래스에서 설정
+    this.attackDuration = 0; // 자식 클래스에서 설정
+    this.damageFrame = 0; // 자식 클래스에서 설정
   }
 
   loadSprites(runSpritePath, deathSpritePath) {
@@ -67,9 +79,43 @@ export class BaseEnemy {
       return true;
     }
 
+    if (this.isAttacking) {
+      this.attackTickCount++;
+      if (this.attackTickCount > this.attackTicksPerFrame) {
+        this.attackTickCount = 0;
+        this.attackFrameIndex++;
+
+        if (this.attackFrameIndex >= this.attackFrames) {
+          this.isAttacking = false;
+          this.attackFrameIndex = 0;
+          this.attackAnimationStarted = false;
+        }
+      }
+      return true;
+    }
+
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
+
+    const attackRange = (this.size + player.size) * 0.9;
+    if (distance < attackRange && now - this.lastAttackTime >= this.attackCooldown) {
+      this.isAttacking = true;
+      this.attackAnimationStarted = true;
+      this.lastAttackTime = now;
+      
+      player.takeDamage(this.attackDamage);
+      if (window.game && window.game.ui) {
+        window.game.ui.addDamageText(
+          player.x,
+          player.y,
+          this.attackDamage,
+          "#ff0000"
+        );
+      }
+      
+      return true;
+    }
 
     this.x += (dx / distance) * this.speed;
     this.y += (dy / distance) * this.speed;
@@ -80,15 +126,22 @@ export class BaseEnemy {
   }
 
   draw(ctx) {
-    const currentSprite = this.isDead ? this.deathSprite : this.runSprite;
+    const currentSprite = this.isDead 
+      ? this.deathSprite 
+      : this.isAttacking 
+        ? this.attackSprite 
+        : this.runSprite;
 
-    if (currentSprite.complete) {
-      if (!this.isDead) {
-        this.tickCount++;
-        if (this.tickCount > this.ticksPerFrame) {
-          this.tickCount = 0;
-          this.frameIndex = (this.frameIndex + 1) % this.runFrames;
-        }
+    if (currentSprite && currentSprite.complete) {
+      let frameIndex = this.frameIndex;
+      let totalFrames = this.runFrames;
+
+      if (this.isDead) {
+        frameIndex = this.frameIndex;
+        totalFrames = this.deathFrames;
+      } else if (this.isAttacking) {
+        frameIndex = this.attackFrameIndex;
+        totalFrames = this.attackFrames;
       }
 
       const frameWidth = 64;
@@ -111,7 +164,7 @@ export class BaseEnemy {
 
       ctx.drawImage(
         currentSprite,
-        this.frameIndex * frameWidth,
+        frameIndex * frameWidth,
         0,
         frameWidth,
         frameHeight,

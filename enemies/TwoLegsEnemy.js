@@ -14,6 +14,15 @@ export class TwoLegsEnemy extends BaseEnemy {
     this.runSprite.src = "./sprite/2legs/2legs_run.png";
     this.deathSprite = new Image();
     this.deathSprite.src = "./sprite/2legs/2legs_death.png";
+
+    this.attackSprite = new Image();
+    this.attackSprite.src = "./sprite/2legs/2legs_attack.png";
+
+    this.attackFrames = 10;
+    this.attackDuration = 80;
+    this.attackTicksPerFrame = 5;
+    this.damageFrame = 5;
+    this.attackDamage = 2;
   }
 
   draw(ctx) {
@@ -30,10 +39,12 @@ export class TwoLegsEnemy extends BaseEnemy {
 
     const currentSprite = this.isDead
       ? this.deathSprite
-      : this.currentRunSprite || this.runSprite;
+      : this.isAttacking
+        ? this.attackSprite
+        : this.currentRunSprite || this.runSprite;
 
     if (currentSprite.complete) {
-      if (!this.isDead) {
+      if (!this.isDead && !this.isAttacking) {
         this.tickCount++;
         if (this.tickCount > this.ticksPerFrame) {
           this.tickCount = 0;
@@ -46,7 +57,7 @@ export class TwoLegsEnemy extends BaseEnemy {
 
       ctx.save();
 
-      if (this.isFlipped && this.currentRunSprite === this.runSprite) {
+      if (this.isFlipped && !this.isAttacking) {
         ctx.translate(
           this.x + this.renderSize / 2,
           this.y - this.renderSize / 2
@@ -61,7 +72,7 @@ export class TwoLegsEnemy extends BaseEnemy {
 
       ctx.drawImage(
         currentSprite,
-        this.frameIndex * frameWidth,
+        (this.isAttacking ? this.attackFrameIndex : this.frameIndex) * frameWidth,
         0,
         frameWidth,
         frameHeight,

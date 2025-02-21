@@ -163,6 +163,7 @@ export class Player {
     this.isDashing = true;
     this.canDash = false;
     this.lastDashTime = Date.now();
+    this.invincible = true; // 대시 시작할 때 무적 상태로 설정
 
     // 대시 사용
     this.currentCharge = Math.max(0, this.currentCharge - 1);
@@ -178,6 +179,7 @@ export class Player {
     // 대시 종료
     setTimeout(() => {
       this.isDashing = false;
+      this.invincible = false; // 대시가 끝나면 무적 상태 해제
     }, this.dashDuration);
 
     // 개별 대시 쿨다운
@@ -251,13 +253,22 @@ export class Player {
     }, this.dashRechargeTime);
   }
 
-  draw(ctx, mouseX, mouseY) {
-    this.lastMouseX = mouseX;
-    this.lastMouseY = mouseY;
+  draw(ctx, showHitboxes = false) {
+    this.lastMouseX = this.mouseX;
+    this.lastMouseY = this.mouseY;
 
     if (!this.invincible || Math.floor(Date.now() / 100) % 2) {
       ctx.save();
       ctx.translate(this.x, this.y);
+
+      // 히트박스 표시 (showHitboxes가 true일 때만)
+      if (showHitboxes) {
+        ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size / 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
       // 대시 이펙트
       if (this.isDashing) {
@@ -340,26 +351,67 @@ export class Player {
   }
 
   takeDamage(amount) {
-    if (!this.invincible) {
-      this.hp -= amount;
-      this.invincible = true;
+    if (this.invincible) return false;
 
-      // 히트 애니메이션 시작
-      this.isHit = true;
-      this.hitFrameIndex = 0;
-      this.hitLastFrameTime = Date.now();
+    this.hp = Math.max(0, this.hp - amount);
+    this.invincible = true;
+    this.isHit = true;
+    this.hitFrameIndex = 0;
+    this.hitLastFrameTime = Date.now();
 
-      setTimeout(() => {
-        this.invincible = false;
-        this.isHit = false;
-      }, this.invincibleTime);
-
-      return this.hp <= 0;
+    // 데미지 텍스트 표시
+    if (window.game && window.game.ui) {
+      window.game.ui.addDamageText(
+        this.x,
+        this.y,
+        Math.round(amount),
+        "#ff0000"
+      );
     }
-    return false;
+
+    // 히트 애니메이션 종료 타이머 추가
+    setTimeout(() => {
+      this.isHit = false;
+      this.hitFrameIndex = 0;
+    }, this.hitFrameDuration * this.hitFrames); // 히트 애니메이션 전체 재생 시간만큼 대기
+
+    setTimeout(() => {
+      this.invincible = false;
+    }, this.invincibleTime);
+
+    return true;
   }
 
   heal(amount) {
     this.hp = Math.min(this.maxHp, this.hp + amount);
+  }
+
+  // 원형 충돌 체크 메서드 추가
+  checkCollision(x, y, radius) {
+    const dx = this.x - x;
+    const dy = this.y - y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    return distance < (this.size / 2 + radius);
+  }
+
+  // 직사각형 충돌 체크 메서드 추가
+  checkRectCollision(x, y, width, height) {
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+    const playerHalfSize = this.size / 2;
+
+    return (
+      Math.abs(this.x - x) < (halfWidth + playerHalfSize) &&
+      Math.abs(this.y - y) < (halfHeight + playerHalfSize)
+    );
+  }
+
+  // 플레이어의 현재 히트박스 정보를 반환하는 메서드
+  getHitbox() {
+    return {
+      x: this.x,
+      y: this.y,
+      radius: this.size / 2
+    };
   }
 }

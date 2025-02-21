@@ -91,14 +91,14 @@ export class Boss {
     this.movePattern = "idle"; // idle, chase, retreat, circle
     this.moveTimer = 0;
     this.moveInterval = 3000; // 3초마다 이동 패턴 변경
-    this.moveSpeed = 0.4; // 이동 속도 5배 감소 (2 / 5)
+    this.moveSpeed = 0.8; // 이동 속도 5배 감소 (2 / 5)
     this.targetX = this.x;
     this.targetY = this.y;
     this.isMoving = false;
     this.facingUp = false;
 
     // 공격 패턴 관련 상태
-    this.attackCooldown = 2000; // 2초
+    this.attackCooldown = 1000; // 2초에서 1초로 감소
     this.lastAttackTime = 0;
     this.isAttacking = false;
     this.currentPhase = 1;
@@ -122,7 +122,7 @@ export class Boss {
       explodeEndFrame: 9,
     };
     this.lastBombTime = 0;
-    this.bombCooldown = 1500; // 폭탄 쿨다운 1.5초로 감소 (기존 3초)
+    this.bombCooldown = 400; // 폭탄 쿨다운 1.5초로 감소 (기존 3초)
     this.bombCount = 5; // 한 번에 던질 폭탄 개수
     this.bombSpread = 120; // 폭탄이 퍼지는 범위 (각도)
 
@@ -150,6 +150,11 @@ export class Boss {
     this.jumpPhase = "none"; // 'none', 'jump', 'indicator', 'slam'
     this.slamDamage = 5;
     this.slamRadius = 150;
+
+    // 인디케이터 위치 추가
+    this.indicatorX = 0;
+    this.indicatorY = 0;
+    this.showIndicator = false;
   }
 
   // 이동 패턴 업데이트
@@ -256,61 +261,50 @@ export class Boss {
   update(now, player) {
     if (this.isDead) return null;
 
-    // 이동 업데이트
-    this.updateMovement(now, player);
+    // 애니메이션 업데이트
+    this.updateAnimation();
 
-    // 페이즈 체크 및 업데이트
-    const currentHpPercent = (this.hp / this.maxHp) * 100;
-    if (currentHpPercent <= 30 && this.currentPhase === 1) {
-      this.currentPhase = 2;
-      this.attackCooldown = 1500;
-      this.attackBonus *= 1.5;
-      this.moveSpeed *= 1.3;
-      this.bombCooldown = 1000;
-      this.bombCount = 5;
-      this.bombSpread = 180;
+    // 점프 공격 업데이트
+    if (this.isJumping) {
+      this.updateJumpAttack(now, player);
+      return null;
+    }
+
+    // 이동 패턴 업데이트 (점프 중이 아닐 때만)
+    if (!this.isJumping && !this.isAttacking) {
+      this.updateMovement(now, player);
     }
 
     // 폭탄 업데이트
     this.updateBombs(now, player);
 
-    // 점프 공격 업데이트
-    if (this.isJumping) {
-      const jumpResult = this.updateJumpAttack(now, player);
-      if (jumpResult) return jumpResult;
-    }
-
-    // 점프 공격 시작 (100% 확률)
-    if (
-      !this.isJumping &&
-      !this.isAttacking &&
-      now - this.lastAttackTime >= this.attackCooldown
-    ) {
-      console.log("점프 공격 시작");
-      this.isAttacking = true;
-      this.startJumpAttack(player);
+    // 공격 쿨다운 체크
+    if (this.isAttacking || now - this.lastAttackTime < this.attackCooldown) {
       return null;
     }
 
-    // 폭탄 던지기 쿨다운 체크
-    if (
-      !this.isJumping &&
-      !this.isAttacking &&
-      now - this.lastBombTime >= this.bombCooldown
-    ) {
-      this.lastBombTime = now;
-      this.currentAnimation = this.facingUp ? "throw_up" : "throw_down";
+    // 플레이어와의 거리 계산
+    const dx = player.x - this.x;
+    const dy = player.y - this.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
 
-      const attacks = [];
+    // 거리가 250 이상일 때 점프 공격, 그 외에는 폭탄 공격
+    if (distance >= 300 && !this.isJumping) {
+      console.log("점프 공격 시작 - 거리:", distance);
+      this.isAttacking = true;
+      this.startJumpAttack(player);
+    } else if (!this.isJumping) {
+      console.log("폭탄 공격 시작 - 거리:", distance);
+      this.isAttacking = true;
+      
+      // 폭탄 발사 (부채꼴 모양으로)
       for (let i = 0; i < this.bombCount; i++) {
-        const angleOffset =
-          (this.bombSpread / 2) * ((2 * i) / (this.bombCount - 1) - 1);
-        attacks.push(this.throwBomb(player, angleOffset));
+        const angleOffset = (this.bombSpread / 2) - (this.bombSpread * i / (this.bombCount - 1));
+        this.throwBomb(player, angleOffset);
       }
-      return {
-        type: "bomb",
-        bombs: attacks,
-      };
+      
+      this.lastAttackTime = now;
+      this.isAttacking = false;
     }
 
     return null;
@@ -343,13 +337,13 @@ export class Boss {
     const targetX = this.x + Math.cos(angle) * distance;
     const targetY = this.y + Math.sin(angle) * distance;
 
-    // 폭탄 생성
+    // 폭탄 생성 (데미지를 3으로 고정)
     const bomb = new BossBomb({
       x: this.x,
       y: this.y,
       targetX: targetX,
       targetY: targetY,
-      damage: baseAttack * 2,
+      damage: 3, // 최대 데미지를 3으로 고정
       initialSpeed: 15,
       explosionRadius: 100,
       explodeSprite: this.explodeSprite,
@@ -357,7 +351,6 @@ export class Boss {
     });
 
     this.activeBombs.push(bomb);
-
     return bomb;
   }
 
@@ -371,54 +364,52 @@ export class Boss {
   draw(ctx, showHitboxes = false) {
     ctx.save();
 
-    // 공격 준비 중일 때 경고 효과
-    if (this.isPreparingAttack) {
-      const progress =
-        (Date.now() - this.preparationStartTime) / this.preparationDuration;
-      const warningAlpha = Math.sin(progress * Math.PI * 4) * 0.5 + 0.5;
-      this.drawBombTrajectory(ctx, warningAlpha);
-    }
-
-    // 애니메이션 업데이트
-    this.updateAnimation();
-
-    // 보스 스프라이트 그리기
-    const sprite = this.sprites[this.currentAnimation];
-    if (sprite && sprite.img.complete) {
-      ctx.drawImage(
-        sprite.img,
-        this.frameIndex * this.frameWidth,
-        0,
-        this.frameWidth,
-        this.frameHeight,
-        this.x - this.renderSize / 2,
-        this.y - this.renderSize / 2,
-        this.renderSize,
-        this.renderSize
-      );
-
-      // 히트박스 표시 (showHitboxes가 true일 때만)
-      if (showHitboxes) {
-        ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(
-          this.x - this.size / 2,
-          this.y - this.size / 2,
-          this.size,
-          this.size
+    // 인디케이터 그리기 (인디케이터 페이즈일 때만)
+    if (this.showIndicator && this.jumpPhase === "indicator") {
+      const sprite = this.sprites.indicator;
+      if (sprite && sprite.img.complete) {
+        ctx.drawImage(
+          sprite.img,
+          this.frameIndex * this.frameWidth,
+          0,
+          this.frameWidth,
+          this.frameHeight,
+          this.x - this.renderSize / 2,
+          this.y - this.renderSize / 2,
+          this.renderSize,
+          this.renderSize
         );
       }
     }
 
-    // 디버그 폭발 애니메이션 그리기
-    if (this.debugBomb) {
-      this.debugBomb.update(Date.now());
-      this.debugBomb.draw(ctx, this.bombSprite, this.explodeSprite);
-
-      if (this.debugBomb.isFinished) {
-        this.debugBomb = null;
-        console.log("디버그: 폭발 테스트 완료");
+    // 보스 스프라이트 그리기 (인디케이터 페이즈가 아닐 때만)
+    if (this.jumpPhase !== "indicator") {
+      const sprite = this.sprites[this.currentAnimation];
+      if (sprite && sprite.img.complete) {
+        ctx.drawImage(
+          sprite.img,
+          this.frameIndex * this.frameWidth,
+          0,
+          this.frameWidth,
+          this.frameHeight,
+          this.x - this.renderSize / 2,
+          this.y - this.renderSize / 2,
+          this.renderSize,
+          this.renderSize
+        );
       }
+    }
+
+    // 히트박스 표시 (showHitboxes가 true일 때만)
+    if (showHitboxes) {
+      ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        this.x - this.size / 2,
+        this.y - this.size / 2,
+        this.size,
+        this.size
+      );
     }
 
     // 활성화된 폭탄 그리기
@@ -476,16 +467,15 @@ export class Boss {
   }
 
   startJumpAttack(player) {
+    console.log('점프 공격 시작');
+    
     this.isJumping = true;
     this.jumpPhase = "jump";
     this.jumpStartTime = Date.now();
-    this.jumpStartX = this.x;
-    this.jumpStartY = this.y;
-    this.jumpTargetX = player.x;
-    this.jumpTargetY = player.y;
     this.currentAnimation = "jump";
     this.frameIndex = 0;
     this.lastFrameTime = Date.now();
+    this.showIndicator = false;
   }
 
   updateJumpAttack(now, player) {
@@ -493,53 +483,119 @@ export class Boss {
 
     switch (this.jumpPhase) {
       case "jump":
-        if (this.frameIndex >= this.sprites.jump.frames - 1) {
+        // 점프 애니메이션 재생 (1초)
+        const jumpProgress = Math.min(elapsedTime / 1000, 1);
+        const jumpTotalFrames = this.sprites.jump.frames;
+        const jumpFrame = Math.min(Math.floor(jumpProgress * jumpTotalFrames), jumpTotalFrames - 1);
+        
+        if (this.frameIndex !== jumpFrame) {
+          this.frameIndex = jumpFrame;
+          this.lastFrameTime = now;
+        }
+
+        // 점프 애니메이션이 완료되면 인디케이터 페이즈로 전환
+        if (jumpProgress >= 1) {
+          console.log('인디케이터 페이즈 시작');
           this.jumpPhase = "indicator";
           this.currentAnimation = "indicator";
           this.frameIndex = 0;
-          this.jumpTargetX = player.x;
-          this.jumpTargetY = player.y;
+          this.lastFrameTime = now;
+          this.jumpStartTime = now;
+          this.showIndicator = true;
+          // 보스를 플레이어의 현재 위치로 이동
+          this.x = player.x;
+          this.y = player.y;
         }
         break;
 
       case "indicator":
-        // 인디케이터 애니메이션이 끝나면 슬램으로 전환
-        if (this.frameIndex >= this.sprites.indicator.frames - 1) {
+        // 인디케이터 애니메이션 재생 (2초)
+        const indicatorProgress = Math.min(elapsedTime / 2000, 1);
+        const indicatorTotalFrames = this.sprites.indicator.frames;
+        const indicatorFrame = Math.min(Math.floor((indicatorProgress % 0.2) * 5 * indicatorTotalFrames), indicatorTotalFrames - 1);
+
+        if (this.frameIndex !== indicatorFrame) {
+          this.frameIndex = indicatorFrame;
+          this.lastFrameTime = now;
+        }
+
+        // 보스가 플레이어를 추적
+        if (indicatorProgress < 1) {
+          const dx = player.x - this.x;
+          const dy = player.y - this.y;
+          
+          const speed = 300 / 1000;
+          const moveDistance = speed * (now - this.lastFrameTime);
+          
+          if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            this.x += (dx / distance) * moveDistance;
+            this.y += (dy / distance) * moveDistance;
+          }
+        }
+
+        // 인디케이터 단계가 완료되면 슬램으로 전환
+        if (indicatorProgress >= 1) {
+          console.log('슬램 페이즈 시작 - 위치:', { x: this.x, y: this.y });
           this.jumpPhase = "slam";
           this.currentAnimation = "slam";
           this.frameIndex = 0;
-
-          // 최종 타겟 위치로 즉시 이동
-          this.x = this.jumpTargetX;
-          this.y = this.jumpTargetY;
-
-          // 슬램 데미지 판정
-          const dx = player.x - this.x;
-          const dy = player.y - this.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance <= this.slamRadius) {
-            const damage = this.slamDamage * this.attackBonus;
-            return {
-              type: "slam",
-              damage: damage,
-              x: this.x,
-              y: this.y,
-              radius: this.slamRadius,
-            };
-          }
+          this.lastFrameTime = now;
+          this.jumpStartTime = now;
+          this.showIndicator = false;
         }
         break;
 
       case "slam":
-        // 슬램 애니메이션이 끝나면 점프 공격 종료
-        if (this.frameIndex >= this.sprites.slam.frames - 1) {
+        // 슬램 애니메이션 재생 (0.5초)
+        const slamProgress = Math.min(elapsedTime / 500, 1);
+        const slamTotalFrames = this.sprites.slam.frames;
+        const slamFrame = Math.min(Math.floor(slamProgress * slamTotalFrames), slamTotalFrames - 1);
+
+        if (this.frameIndex !== slamFrame) {
+          this.frameIndex = slamFrame;
+          this.lastFrameTime = now;
+
+          // 슬램 프레임이 중간(5프레임)일 때 데미지 적용
+          if (slamFrame === Math.floor(slamTotalFrames / 2)) {
+            // 플레이어와의 거리 계산
+            const dx = player.x - this.x;
+            const dy = player.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // 슬램 범위 내에 있으면 데미지 적용
+            if (distance <= this.slamRadius) {
+              const damageRatio = 1 - (distance / this.slamRadius);
+              const damage = this.slamDamage * damageRatio * this.attackBonus;
+              
+              player.takeDamage(damage);
+              
+              // 데미지 텍스트 표시
+              if (window.game && window.game.ui) {
+                window.game.ui.addDamageText(
+                  player.x,
+                  player.y,
+                  Math.round(damage),
+                  "#ff0000"
+                );
+              }
+              
+              console.log('슬램 데미지 적용:', damage);
+            }
+          }
+        }
+
+        // 슬램 애니메이션이 완료되면 공격 종료
+        if (slamProgress >= 1) {
+          console.log('점프 공격 종료');
           this.isJumping = false;
           this.jumpPhase = "none";
           this.currentAnimation = this.facingUp ? "idle_up" : "idle_down";
-          this.lastAttackTime = now;
+          this.frameIndex = 0;
+          this.lastFrameTime = now;
+          this.lastAttackTime = now - (this.attackCooldown / 2); // 쿨다운 절반만 적용
           this.isAttacking = false;
-          console.log("점프 공격 종료");
+          this.updateAnimation();
         }
         break;
     }
@@ -607,9 +663,9 @@ class BossBomb {
     this.explodeSprite = explodeSprite;
 
     // 폭발 범위를 애니메이션의 직사각형 크기로 설정
-    this.explosionWidth = this.explodeFrameWidth * this.explodeScale; // 절반 크기로 조정
-    this.explosionHeight = (this.explodeFrameHeight * this.explodeScale) / 2; // 절반 크기로 조정
-    this.explosionOffsetY = this.explosionHeight / 2; // 아래쪽 정렬을 위한 오프셋
+    this.explosionWidth = this.explodeFrameWidth * this.explodeScale * 2; // 2배로 증가
+    this.explosionHeight = this.explodeFrameHeight * this.explodeScale * 2; // 2배로 증가
+    this.explosionOffsetY = this.explosionHeight / 2;
 
     // 디버그용 상태 추적
     this.debugState = "";
@@ -624,31 +680,31 @@ class BossBomb {
         // 폭발 첫 프레임에서 데미지 적용
         if (!this.hasDamageApplied && this.explodeFrameIndex === 0) {
           if (player) {
-            // 직사각형 충돌 체크
-            const halfWidth = this.explosionWidth / 2;
-            const halfHeight = this.explosionHeight / 2;
+            // 원형 충돌 체크로 변경
+            const dx = player.x - this.x;
+            const dy = player.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const maxDistance = Math.max(this.explosionWidth, this.explosionHeight) / 2;
 
-            // 플레이어가 폭발 범위 내에 있는지 확인 (아래쪽 정렬 고려)
-            const inRangeX = Math.abs(player.x - this.x) <= halfWidth;
-            const inRangeY =
-              Math.abs(player.y - (this.y + this.explosionOffsetY)) <=
-              halfHeight;
-
-            if (inRangeX && inRangeY) {
-              // 중심으로부터의 상대적 거리 계산 (0~1 사이 값)
-              const relativeX = Math.abs(player.x - this.x) / halfWidth;
-              const relativeY =
-                Math.abs(player.y - (this.y + this.explosionOffsetY)) /
-                halfHeight;
-              const relativeDistance = Math.max(relativeX, relativeY);
-
-              // 거리에 따른 데미지 감소
-              const damageRatio = Math.pow(1 - relativeDistance, 2);
-              const damage = this.damage * damageRatio;
+            if (distance <= maxDistance) {
+              // 거리에 따른 데미지 감소 (중심에 가까울수록 더 큰 데미지)
+              const damageRatio = Math.pow(1 - (distance / maxDistance), 2);
+              const damage = Math.max(1, this.damage * damageRatio); // 최소 데미지를 1로 설정
 
               player.takeDamage(damage);
+
+              // 데미지 텍스트 표시
+              if (window.game && window.game.ui) {
+                window.game.ui.addDamageText(
+                  player.x,
+                  player.y,
+                  Math.round(damage),
+                  "#ff0000"
+                );
+              }
+
               console.log(
-                `폭발 데미지 적용: ${damage} (상대거리: ${relativeDistance}, 범위: ${this.explosionWidth}x${this.explosionHeight})`
+                `폭발 데미지 적용: ${damage} (거리: ${distance}, 최대거리: ${maxDistance})`
               );
             }
           }

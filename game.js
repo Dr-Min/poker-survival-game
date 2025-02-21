@@ -165,10 +165,16 @@ export class Game {
   setupEventListeners() {
     // 키 이벤트
     window.addEventListener("keydown", (e) => {
+      // F5와 F12는 기본 동작 허용
+      if (e.key === 'F5' || e.key === 'F12') return;
+      
       e.preventDefault(); // 기본 동작 방지
       this.handleKeyDown(e);
     });
     window.addEventListener("keyup", (e) => {
+      // F5와 F12는 기본 동작 허용
+      if (e.key === 'F5' || e.key === 'F12') return;
+      
       e.preventDefault(); // 기본 동작 방지
       this.handleKeyUp(e);
     });
@@ -540,6 +546,13 @@ export class Game {
       return;
     }
 
+    // 플레이어 체력 체크
+    if (this.player.hp <= 0) {
+      this.isGameOver = true;
+      this.stopGame();
+      return;
+    }
+
     // 보스전 업데이트
     if (this.isBossBattle && this.boss) {
       const now = Date.now();
@@ -547,6 +560,23 @@ export class Game {
 
       if (attack) {
         this.handleBossAttack(attack);
+      }
+
+      // 보스와 플레이어의 충돌 처리 추가
+      const dx = this.boss.x - this.player.x;
+      const dy = this.boss.y - this.player.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const minDistance = (this.boss.size + this.player.size) * 0.8;
+
+      if (distance < minDistance) {
+        // 보스를 플레이어로부터 밀어냄
+        const angle = Math.atan2(dy, dx);
+        this.boss.x = this.player.x + Math.cos(angle) * minDistance;
+        this.boss.y = this.player.y + Math.sin(angle) * minDistance;
+
+        // 화면 경계 체크
+        this.boss.x = Math.max(this.boss.size, Math.min(1200 - this.boss.size, this.boss.x));
+        this.boss.y = Math.max(this.boss.size, Math.min(800 - this.boss.size, this.boss.y));
       }
 
       // 보스전 승리/패배 체크
@@ -608,20 +638,14 @@ export class Game {
     }
 
     if (this.isShowingCommunityCards) {
-      // UI에 수집된 카드 정보 전달
       this.ui.collectedCards = this.cardManager.getCollectedCards();
       this.ui.drawBossPreviewScreen(this.pokerSystem.communityCards);
       return;
     }
 
     if (this.isPokerPhase) {
-      // UI에 수집된 카드 정보 전달
       this.ui.collectedCards = this.cardManager.getCollectedCards();
-      this.ui.drawPokerUI(
-        this.pokerState,
-        this.pokerSystem,
-        this.selectedCards
-      );
+      this.ui.drawPokerUI(this.pokerState, this.pokerSystem, this.selectedCards);
       return;
     }
 
@@ -635,6 +659,9 @@ export class Game {
     if (this.isBossBattle && this.boss) {
       this.boss.draw(this.ctx, this.debugOptions.showHitboxes);
     }
+
+    // 데미지 텍스트 업데이트 및 그리기
+    this.ui.updateDamageTexts();
 
     // UI에 수집된 카드 정보 전달
     this.ui.collectedCards = this.cardManager.getCollectedCards();
@@ -906,10 +933,10 @@ export class Game {
     switch (attack.type) {
       case "single":
         // 단일 강공격: 플레이어 방향으로 강한 공격
-        const dx = this.player.x - this.canvas.width / 2;
-        const dy = this.player.y - 150;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance <= attack.range) {
+        const singleDx = this.player.x - this.canvas.width / 2;
+        const singleDy = this.player.y - 150;
+        const singleDistance = Math.sqrt(singleDx * singleDx + singleDy * singleDy);
+        if (singleDistance <= attack.range) {
           this.player.takeDamage(attack.damage);
           this.ui.addDamageText(
             this.player.x,
@@ -923,11 +950,12 @@ export class Game {
 
       case "area":
         // 광역 약공격: 넓은 범위에 약한 공격
-        const playerDistance = Math.sqrt(
-          Math.pow(this.player.x - this.canvas.width / 2, 2) +
-            Math.pow(this.player.y - 150, 2)
+        const areaDx = this.player.x - this.canvas.width / 2;
+        const areaDy = this.player.y - 150;
+        const areaDistance = Math.sqrt(
+          Math.pow(areaDx, 2) + Math.pow(areaDy, 2)
         );
-        if (playerDistance <= attack.range) {
+        if (areaDistance <= attack.range) {
           this.player.takeDamage(attack.damage);
           this.ui.addDamageText(
             this.player.x,
@@ -959,6 +987,43 @@ export class Game {
 
       case "bomb":
         // 폭탄 공격은 보스 클래스 내부에서 처리됨
+        break;
+
+      case "slam":
+        console.log('슬램 공격 처리:', attack);
+        // 슬램 공격의 범위 내에 있는지 확인
+        const slamDx = this.player.x - attack.x;
+        const slamDy = this.player.y - attack.y;
+        const slamDistance = Math.sqrt(slamDx * slamDx + slamDy * slamDy);
+
+        if (slamDistance <= attack.radius) {
+          // 거리에 따른 데미지 감소 계산
+          const damageRatio = 1 - (slamDistance / attack.radius);
+          const finalDamage = attack.damage * damageRatio;
+          
+          console.log('슬램 데미지 계산:', {
+            distance: slamDistance,
+            radius: attack.radius,
+            baseDamage: attack.damage,
+            damageRatio: damageRatio,
+            finalDamage: finalDamage
+          });
+
+          this.player.takeDamage(finalDamage);
+          
+          // 데미지 텍스트 표시 추가
+          if (this.ui) {
+            this.ui.addDamageText(
+              this.player.x,
+              this.player.y,
+              Math.round(finalDamage),
+              "#ff0000"
+            );
+          }
+
+          // 슬램 이펙트 추가
+          this.addSlamEffect(attack.x, attack.y, attack.radius);
+        }
         break;
     }
   }
@@ -1078,6 +1143,39 @@ export class Game {
     }
   }
 
+  addSlamEffect(x, y, radius) {
+    // 슬램 이펙트를 화면에 추가
+    const ctx = this.canvas.getContext('2d');
+    
+    // 원형 충격파 애니메이션
+    let opacity = 1;
+    let currentRadius = 0;
+    const maxRadius = radius;
+    const animationDuration = 500; // 0.5초
+    const startTime = Date.now();
+
+    const animate = () => {
+      const progress = (Date.now() - startTime) / animationDuration;
+      if (progress >= 1) return;
+
+      currentRadius = maxRadius * progress;
+      opacity = 1 - progress;
+
+      ctx.save();
+      ctx.globalAlpha = opacity;
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x, y, currentRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      requestAnimationFrame(animate);
+    };
+
+    animate();
+  }
+
   // 보스전 결과 체크
   checkBossBattleResult() {
     if (this.boss.isDead) {
@@ -1188,4 +1286,5 @@ export class Game {
 
 window.onload = function () {
   const game = new Game();
+  window.game = game; // 전역 변수로 game 인스턴스 저장
 };

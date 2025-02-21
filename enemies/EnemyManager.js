@@ -94,6 +94,27 @@ export class EnemyManager {
       }
     }
 
+    // 플레이어와 적의 충돌 처리 추가
+    for (const enemy of this.enemies) {
+      if (!enemy.isDead) {
+        const dx = enemy.x - player.x;
+        const dy = enemy.y - player.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const minDistance = (enemy.size + player.size) * 0.8;
+
+        if (distance < minDistance) {
+          // 적을 플레이어로부터 밀어냄
+          const angle = Math.atan2(dy, dx);
+          enemy.x = player.x + Math.cos(angle) * minDistance;
+          enemy.y = player.y + Math.sin(angle) * minDistance;
+
+          // 화면 경계 체크
+          enemy.x = Math.max(enemy.size, Math.min(1200 - enemy.size, enemy.x));
+          enemy.y = Math.max(enemy.size, Math.min(800 - enemy.size, enemy.y));
+        }
+      }
+    }
+
     for (const enemy of this.enemies) {
       if (enemy.isDead) {
         if (!enemy.isCountedAsKill) {
