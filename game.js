@@ -535,21 +535,6 @@ export class Game {
 
   update() {
     if (this.isPokerPhase) {
-      // 포커 페이즈 업데이트
-      if (
-        this.pokerState.currentTurn === "boss" &&
-        this.pokerState.phase === "betting"
-      ) {
-        // 보스 AI의 결정
-        this.handleBossDecision();
-      }
-      return;
-    }
-
-    // 플레이어 체력 체크
-    if (this.player.hp <= 0) {
-      this.isGameOver = true;
-      this.stopGame();
       return;
     }
 
@@ -559,27 +544,48 @@ export class Game {
       const attack = this.boss.update(now, this.player);
 
       if (attack) {
-        this.handleBossAttack(attack);
+        // 공격 정보를 상태로 저장
+        this.currentBossAttack = {
+          ...attack,
+          startTime: now,
+          duration: attack.type === "slam" ? 1000 : 500, // 공격 타입별 지속시간
+          hasDealtDamage: false
+        };
       }
 
-      // 보스와 플레이어의 충돌 처리 추가
+      // 현재 진행 중인 공격 업데이트
+      if (this.currentBossAttack) {
+        const attackAge = now - this.currentBossAttack.startTime;
+        
+        // 공격 판정 타이밍 (애니메이션 중간 시점)
+        const damageTime = this.currentBossAttack.duration * 0.5;
+        
+        // 데미지 판정 시점에 도달했고 아직 데미지를 주지 않았다면
+        if (attackAge >= damageTime && !this.currentBossAttack.hasDealtDamage) {
+          this.handleBossAttack(this.currentBossAttack);
+          this.currentBossAttack.hasDealtDamage = true;
+        }
+        
+        // 공격 종료
+        if (attackAge >= this.currentBossAttack.duration) {
+          this.currentBossAttack = null;
+        }
+      }
+
+      // 보스와 플레이어의 충돌 처리
       const dx = this.boss.x - this.player.x;
       const dy = this.boss.y - this.player.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
       const minDistance = (this.boss.size + this.player.size) * 0.8;
 
       if (distance < minDistance) {
-        // 보스를 플레이어로부터 밀어냄
         const angle = Math.atan2(dy, dx);
         this.boss.x = this.player.x + Math.cos(angle) * minDistance;
         this.boss.y = this.player.y + Math.sin(angle) * minDistance;
-
-        // 화면 경계 체크
         this.boss.x = Math.max(this.boss.size, Math.min(1200 - this.boss.size, this.boss.x));
         this.boss.y = Math.max(this.boss.size, Math.min(800 - this.boss.size, this.boss.y));
       }
 
-      // 보스전 승리/패배 체크
       this.checkBossBattleResult();
     }
 
@@ -631,6 +637,53 @@ export class Game {
     // 배경 그리기 (투명)
     this.ctx.fillStyle = "rgba(0, 0, 0, 0)";
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 보스 공격 판정 영역 그리기
+    if (this.currentBossAttack) {
+      const attack = this.currentBossAttack;
+      const ctx = this.ctx;
+      
+      ctx.save();
+      
+      // 공격 판정 영역 표시
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#ff0000';
+      
+      switch (attack.type) {
+        case "bomb":
+        case "slam":
+          ctx.beginPath();
+          ctx.arc(attack.x, attack.y, attack.radius, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // 테두리
+          ctx.globalAlpha = 0.8;
+          ctx.strokeStyle = '#ff0000';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          // 데미지 표시
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '14px Arial';
+          ctx.fillText(`데미지: ${attack.damage}`, attack.x - 30, attack.y - attack.radius - 10);
+          break;
+          
+        case "single":
+        case "area":
+          ctx.beginPath();
+          ctx.arc(attack.x || this.canvas.width / 2, attack.y || 150, attack.range, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.globalAlpha = 0.8;
+          ctx.strokeStyle = '#ff0000';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          break;
+      }
+      
+      ctx.restore();
+    }
 
     if (this.isStartScreen) {
       this.ui.drawStartScreen();
@@ -932,7 +985,29 @@ export class Game {
   handleBossAttack(attack) {
     switch (attack.type) {
       case "single":
-        // 단일 강공격: 플레이어 방향으로 강한 공격
+        // 단일 강공격 판정 영역 표시
+        const ctx = this.canvas.getContext('2d');
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = '#ff0000';
+        ctx.beginPath();
+        ctx.arc(this.canvas.width / 2, 150, attack.range, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 테두리 표시
+        ctx.globalAlpha = 0.8;
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // 데미지 표시
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '14px Arial';
+        ctx.fillText(`데미지: ${attack.damage}`, this.canvas.width / 2 - 30, 120);
+        ctx.restore();
+
+        // 데미지 판정
         const singleDx = this.player.x - this.canvas.width / 2;
         const singleDy = this.player.y - 150;
         const singleDistance = Math.sqrt(singleDx * singleDx + singleDy * singleDy);
@@ -945,16 +1020,35 @@ export class Game {
             "#ff0000"
           );
         }
-        this.boss.addAttackEffect("single", this.player);
         break;
 
       case "area":
-        // 광역 약공격: 넓은 범위에 약한 공격
+        // 광역 약공격 판정 영역 표시
+        const areaCtx = this.canvas.getContext('2d');
+        areaCtx.save();
+        areaCtx.globalAlpha = 0.2;
+        areaCtx.fillStyle = '#ff0000';
+        areaCtx.beginPath();
+        areaCtx.arc(this.canvas.width / 2, 150, attack.range, 0, Math.PI * 2);
+        areaCtx.fill();
+        
+        // 테두리 표시
+        areaCtx.globalAlpha = 0.8;
+        areaCtx.strokeStyle = '#ff0000';
+        areaCtx.lineWidth = 2;
+        areaCtx.stroke();
+        
+        // 데미지 표시
+        areaCtx.globalAlpha = 1;
+        areaCtx.fillStyle = '#ffffff';
+        areaCtx.font = '14px Arial';
+        areaCtx.fillText(`데미지: ${attack.damage}`, this.canvas.width / 2 - 30, 120);
+        areaCtx.restore();
+
+        // 데미지 판정
         const areaDx = this.player.x - this.canvas.width / 2;
         const areaDy = this.player.y - 150;
-        const areaDistance = Math.sqrt(
-          Math.pow(areaDx, 2) + Math.pow(areaDy, 2)
-        );
+        const areaDistance = Math.sqrt(areaDx * areaDx + areaDy * areaDy);
         if (areaDistance <= attack.range) {
           this.player.takeDamage(attack.damage);
           this.ui.addDamageText(
@@ -964,54 +1058,170 @@ export class Game {
             "#ff0000"
           );
         }
-        this.boss.addAttackEffect("area", this.player);
         break;
 
       case "multi":
-        // 연속 공격: 여러 번 공격
-        this.startMultiAttack(attack);
-        this.boss.addAttackEffect("multi", this.player);
+        // 연속 공격 판정 영역 표시
+        const multiCtx = this.canvas.getContext('2d');
+        multiCtx.save();
+        multiCtx.globalAlpha = 0.2;
+        multiCtx.fillStyle = '#ff0000';
+        multiCtx.beginPath();
+        multiCtx.arc(this.canvas.width / 2, 150, 100, 0, Math.PI * 2);
+        multiCtx.fill();
+        
+        // 테두리 표시
+        multiCtx.globalAlpha = 0.8;
+        multiCtx.strokeStyle = '#ff0000';
+        multiCtx.lineWidth = 2;
+        multiCtx.stroke();
+        
+        // 데미지 표시
+        multiCtx.globalAlpha = 1;
+        multiCtx.fillStyle = '#ffffff';
+        multiCtx.font = '14px Arial';
+        multiCtx.fillText(`데미지: ${attack.damage} x ${attack.count}`, this.canvas.width / 2 - 40, 120);
+        multiCtx.restore();
         break;
 
       case "cross":
-        // 십자 레이저: 십자 모양의 광선 공격
-        this.startCrossAttack(attack);
-        this.boss.addAttackEffect("cross", this.player);
+        // 십자 레이저 판정 영역 표시
+        const crossCtx = this.canvas.getContext('2d');
+        crossCtx.save();
+        crossCtx.globalAlpha = 0.2;
+        crossCtx.fillStyle = '#ff0000';
+        
+        // 가로 레이저
+        crossCtx.fillRect(0, this.boss.y - attack.width / 2, this.canvas.width, attack.width);
+        // 세로 레이저
+        crossCtx.fillRect(this.boss.x - attack.width / 2, 0, attack.width, this.canvas.height);
+        
+        // 테두리 표시
+        crossCtx.globalAlpha = 0.8;
+        crossCtx.strokeStyle = '#ff0000';
+        crossCtx.lineWidth = 2;
+        crossCtx.strokeRect(0, this.boss.y - attack.width / 2, this.canvas.width, attack.width);
+        crossCtx.strokeRect(this.boss.x - attack.width / 2, 0, attack.width, this.canvas.height);
+        
+        // 데미지 표시
+        crossCtx.globalAlpha = 1;
+        crossCtx.fillStyle = '#ffffff';
+        crossCtx.font = '14px Arial';
+        crossCtx.fillText(`데미지: ${attack.damage}/초`, this.boss.x + 20, this.boss.y - 20);
+        crossCtx.restore();
         break;
 
       case "circular":
-        // 원형 탄막: 360도 방향으로 탄막 발사
-        this.startCircularAttack(attack);
-        this.boss.addAttackEffect("circular", this.player);
+        // 원형 탄막 판정 영역 표시
+        const circularCtx = this.canvas.getContext('2d');
+        circularCtx.save();
+        
+        // 탄막 패턴 표시
+        for (let i = 0; i < attack.bulletCount; i++) {
+          const angle = (i * Math.PI * 2) / attack.bulletCount;
+          const x = this.boss.x + Math.cos(angle) * 50;
+          const y = this.boss.y + Math.sin(angle) * 50;
+          
+          circularCtx.globalAlpha = 0.2;
+          circularCtx.fillStyle = '#ff0000';
+          circularCtx.beginPath();
+          circularCtx.arc(x, y, 8, 0, Math.PI * 2);
+          circularCtx.fill();
+          
+          // 탄막 방향 표시
+          circularCtx.globalAlpha = 0.8;
+          circularCtx.strokeStyle = '#ff0000';
+          circularCtx.beginPath();
+          circularCtx.moveTo(this.boss.x, this.boss.y);
+          circularCtx.lineTo(x + Math.cos(angle) * 30, y + Math.sin(angle) * 30);
+          circularCtx.stroke();
+        }
+        
+        // 데미지 표시
+        circularCtx.globalAlpha = 1;
+        circularCtx.fillStyle = '#ffffff';
+        circularCtx.font = '14px Arial';
+        circularCtx.fillText(`데미지: ${attack.damage}/발`, this.boss.x + 20, this.boss.y - 20);
+        circularCtx.restore();
         break;
 
       case "bomb":
-        // 폭탄 공격은 보스 클래스 내부에서 처리됨
+        // 폭탄 공격 판정 영역 표시
+        const bombCtx = this.canvas.getContext('2d');
+        bombCtx.save();
+        
+        // 폭발 범위 표시
+        bombCtx.globalAlpha = 0.2;
+        bombCtx.fillStyle = '#ff0000';
+        bombCtx.beginPath();
+        bombCtx.arc(attack.x, attack.y, attack.radius, 0, Math.PI * 2);
+        bombCtx.fill();
+        
+        // 테두리 표시
+        bombCtx.globalAlpha = 0.8;
+        bombCtx.strokeStyle = '#ff0000';
+        bombCtx.lineWidth = 2;
+        bombCtx.stroke();
+        
+        // 데미지 표시
+        bombCtx.globalAlpha = 1;
+        bombCtx.fillStyle = '#ffffff';
+        bombCtx.font = '14px Arial';
+        bombCtx.fillText(`폭발 데미지: ${attack.damage}`, attack.x - 40, attack.y - attack.radius - 10);
+        
+        bombCtx.restore();
         break;
 
       case "slam":
-        console.log('슬램 공격 처리:', attack);
-        // 슬램 공격의 범위 내에 있는지 확인
+        // 슬램 공격 판정 영역 표시
+        const slamCtx = this.canvas.getContext('2d');
+        slamCtx.save();
+        
+        // 충격파 범위 표시
+        slamCtx.globalAlpha = 0.2;
+        slamCtx.fillStyle = '#ff0000';
+        slamCtx.beginPath();
+        slamCtx.arc(attack.x, attack.y, attack.radius, 0, Math.PI * 2);
+        slamCtx.fill();
+        
+        // 테두리와 거리별 데미지 구간 표시
+        const radiusSteps = [0.33, 0.66, 1];
+        radiusSteps.forEach((step, index) => {
+          slamCtx.globalAlpha = 0.8;
+          slamCtx.strokeStyle = '#ff0000';
+          slamCtx.lineWidth = 2;
+          slamCtx.beginPath();
+          slamCtx.arc(attack.x, attack.y, attack.radius * step, 0, Math.PI * 2);
+          slamCtx.stroke();
+          
+          // 구간별 데미지 표시
+          const damageAtRadius = Math.round(attack.damage * (1 - step));
+          slamCtx.globalAlpha = 1;
+          slamCtx.fillStyle = '#ffffff';
+          slamCtx.font = '12px Arial';
+          slamCtx.fillText(`${damageAtRadius}`, attack.x + 10, attack.y - (attack.radius * step));
+        });
+        
+        // 최대 데미지 표시
+        slamCtx.globalAlpha = 1;
+        slamCtx.fillStyle = '#ffffff';
+        slamCtx.font = '14px Arial';
+        slamCtx.fillText(`최대 데미지: ${attack.damage}`, attack.x - 50, attack.y - attack.radius - 10);
+        
+        slamCtx.restore();
+        
+        // 실제 데미지 판정
         const slamDx = this.player.x - attack.x;
         const slamDy = this.player.y - attack.y;
         const slamDistance = Math.sqrt(slamDx * slamDx + slamDy * slamDy);
 
         if (slamDistance <= attack.radius) {
-          // 거리에 따른 데미지 감소 계산
           const damageRatio = 1 - (slamDistance / attack.radius);
           const finalDamage = attack.damage * damageRatio;
           
-          console.log('슬램 데미지 계산:', {
-            distance: slamDistance,
-            radius: attack.radius,
-            baseDamage: attack.damage,
-            damageRatio: damageRatio,
-            finalDamage: finalDamage
-          });
-
-          this.player.takeDamage(finalDamage);
+          console.log(`슬램 공격 데미지 판정: 거리=${slamDistance.toFixed(2)}, 반경=${attack.radius}, 데미지 비율=${damageRatio.toFixed(2)}, 최종 데미지=${finalDamage.toFixed(0)}`);
           
-          // 데미지 텍스트 표시 추가
+          this.player.takeDamage(finalDamage);
           if (this.ui) {
             this.ui.addDamageText(
               this.player.x,
@@ -1020,160 +1230,9 @@ export class Game {
               "#ff0000"
             );
           }
-
-          // 슬램 이펙트 추가
-          this.addSlamEffect(attack.x, attack.y, attack.radius);
         }
         break;
     }
-  }
-
-  startMultiAttack(attack) {
-    let count = 0;
-    const interval = setInterval(() => {
-      if (count >= attack.count || !this.boss || this.boss.isDead) {
-        clearInterval(interval);
-        this.boss.isAttacking = false;
-        return;
-      }
-
-      const dx = this.player.x - this.canvas.width / 2;
-      const dy = this.player.y - 150;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance <= 100) {
-        this.player.takeDamage(attack.damage);
-        this.ui.addDamageText(
-          this.player.x,
-          this.player.y,
-          attack.damage,
-          "#ff0000"
-        );
-      }
-
-      count++;
-    }, attack.interval);
-  }
-
-  startCrossAttack(attack) {
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      if (
-        Date.now() - startTime >= attack.duration ||
-        !this.boss ||
-        this.boss.isDead
-      ) {
-        clearInterval(interval);
-        this.boss.isAttacking = false;
-        return;
-      }
-
-      // 가로선 충돌 체크
-      if (Math.abs(this.player.y - this.boss.y) <= attack.width / 2) {
-        this.player.takeDamage(attack.damage / 10);
-        this.ui.addDamageText(
-          this.player.x,
-          this.player.y,
-          attack.damage / 10,
-          "#ff0000"
-        );
-      }
-
-      // 세로선 충돌 체크
-      if (Math.abs(this.player.x - this.boss.x) <= attack.width / 2) {
-        this.player.takeDamage(attack.damage / 10);
-        this.ui.addDamageText(
-          this.player.x,
-          this.player.y,
-          attack.damage / 10,
-          "#ff0000"
-        );
-      }
-    }, 100);
-  }
-
-  startCircularAttack(attack) {
-    for (let i = 0; i < attack.bulletCount; i++) {
-      const angle = (i * Math.PI * 2) / attack.bulletCount;
-      const dx = Math.cos(angle);
-      const dy = Math.sin(angle);
-
-      // 원형으로 퍼지는 탄막 생성
-      setTimeout(() => {
-        if (!this.boss || this.boss.isDead) return;
-
-        const bulletSpeed = 3;
-        const bullet = {
-          x: this.boss.x,
-          y: this.boss.y,
-          dx: dx * bulletSpeed,
-          dy: dy * bulletSpeed,
-          damage: attack.damage,
-          size: 8,
-          duration: 2000,
-          startTime: Date.now(),
-        };
-
-        const bulletInterval = setInterval(() => {
-          if (Date.now() - bullet.startTime >= bullet.duration) {
-            clearInterval(bulletInterval);
-            return;
-          }
-
-          bullet.x += bullet.dx;
-          bullet.y += bullet.dy;
-
-          // 플레이어와의 충돌 체크
-          const distToPlayer = Math.sqrt(
-            Math.pow(this.player.x - bullet.x, 2) +
-              Math.pow(this.player.y - bullet.y, 2)
-          );
-
-          if (distToPlayer < (this.player.size + bullet.size) / 2) {
-            this.player.takeDamage(bullet.damage);
-            this.ui.addDamageText(
-              this.player.x,
-              this.player.y,
-              bullet.damage,
-              "#ff0000"
-            );
-            clearInterval(bulletInterval);
-          }
-        }, 16);
-      }, i * 50); // 탄막이 순차적으로 발사되도록 지연
-    }
-  }
-
-  addSlamEffect(x, y, radius) {
-    // 슬램 이펙트를 화면에 추가
-    const ctx = this.canvas.getContext('2d');
-    
-    // 원형 충격파 애니메이션
-    let opacity = 1;
-    let currentRadius = 0;
-    const maxRadius = radius;
-    const animationDuration = 500; // 0.5초
-    const startTime = Date.now();
-
-    const animate = () => {
-      const progress = (Date.now() - startTime) / animationDuration;
-      if (progress >= 1) return;
-
-      currentRadius = maxRadius * progress;
-      opacity = 1 - progress;
-
-      ctx.save();
-      ctx.globalAlpha = opacity;
-      ctx.strokeStyle = '#ff0000';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(x, y, currentRadius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-
-      requestAnimationFrame(animate);
-    };
-
-    animate();
   }
 
   // 보스전 결과 체크

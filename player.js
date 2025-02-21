@@ -10,7 +10,8 @@ export class Player {
     this.hp = 10;
     this.maxHp = 10;
     this.invincible = false;
-    this.invincibleTime = 1000;
+    this.invincibleTime = 2000;
+    this.isDashInvincible = false;
     this.bulletSpeed = 5.6;
     this.lastShot = 0;
     this.shotInterval = 600;
@@ -18,8 +19,8 @@ export class Player {
     this.lastHitTime = 0;
 
     // 대시 관련 속성 수정
-    this.dashSpeed = 4; // 대시 속도 절반으로 감소
-    this.dashDuration = 200; // 대시 지속시간 (ms)
+    this.dashSpeed = 6; // 대시 속도 절반으로 감소
+    this.dashDuration = 200; // 대시 지속시간 (ms) - 200ms에서 400ms로 증가
     this.dashCooldown = 500; // 개별 대시 쿨다운 (0.5초)
     this.dashRechargeTime = 5000; // 대시 충전 시간 (5초)
     this.isDashing = false;
@@ -160,10 +161,12 @@ export class Player {
   dash(targetX, targetY) {
     if (!this.canDash || this.isDashing || this.dashCharges <= 0) return;
 
+    console.log('대시 시작');
     this.isDashing = true;
     this.canDash = false;
     this.lastDashTime = Date.now();
-    this.invincible = true; // 대시 시작할 때 무적 상태로 설정
+    this.isDashInvincible = true;
+    console.log('무적 판정 시작 - 대시');
 
     // 대시 사용
     this.currentCharge = Math.max(0, this.currentCharge - 1);
@@ -178,8 +181,10 @@ export class Player {
 
     // 대시 종료
     setTimeout(() => {
+      console.log('대시 종료');
       this.isDashing = false;
-      this.invincible = false; // 대시가 끝나면 무적 상태 해제
+      this.isDashInvincible = false;
+      console.log('무적 판정 종료 - 대시');
     }, this.dashDuration);
 
     // 개별 대시 쿨다운
@@ -199,9 +204,12 @@ export class Player {
   startDash(keys) {
     if (!this.canDash || this.isDashing || this.dashCharges <= 0) return;
 
+    console.log('대시 시작');
     this.isDashing = true;
     this.canDash = false;
     this.lastDashTime = Date.now();
+    this.isDashInvincible = true;
+    console.log('무적 판정 시작 - 대시');
 
     // 대시 사용
     this.currentCharge = Math.max(0, this.currentCharge - 1);
@@ -236,7 +244,10 @@ export class Player {
 
     // 대시 종료
     setTimeout(() => {
+      console.log('대시 종료');
       this.isDashing = false;
+      this.isDashInvincible = false;
+      console.log('무적 판정 종료 - 대시');
     }, this.dashDuration);
 
     // 개별 대시 쿨다운
@@ -257,17 +268,22 @@ export class Player {
     this.lastMouseX = this.mouseX;
     this.lastMouseY = this.mouseY;
 
-    if (!this.invincible || Math.floor(Date.now() / 100) % 2) {
+    if (!this.invincible || !this.isDashInvincible || Math.floor(Date.now() / 100) % 2) {
       ctx.save();
       ctx.translate(this.x, this.y);
 
-      // 히트박스 표시 (showHitboxes가 true일 때만)
-      if (showHitboxes) {
-        ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, this.size / 2, 0, Math.PI * 2);
-        ctx.stroke();
+      // 히트박스 항상 표시
+      ctx.strokeStyle = (this.invincible || this.isDashInvincible) ? "rgba(0, 255, 0, 0.5)" : "rgba(255, 0, 0, 0.5)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.size / 2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 대시 중일 때만 무적 텍스트 표시
+      if (this.isDashInvincible && this.isDashing) {
+        ctx.fillStyle = "#00ff00";
+        ctx.font = "12px Arial";
+        ctx.fillText("무적", -15, -this.size);
       }
 
       // 대시 이펙트
@@ -351,7 +367,7 @@ export class Player {
   }
 
   takeDamage(amount) {
-    if (this.invincible) return false;
+    if (this.invincible || this.isDashInvincible) return false;
 
     this.hp = Math.max(0, this.hp - amount);
     this.invincible = true;

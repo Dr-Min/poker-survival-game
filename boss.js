@@ -666,6 +666,7 @@ class BossBomb {
     this.explosionWidth = this.explodeFrameWidth * this.explodeScale * 2; // 2배로 증가
     this.explosionHeight = this.explodeFrameHeight * this.explodeScale * 2; // 2배로 증가
     this.explosionOffsetY = this.explosionHeight / 2;
+    this.explosionRadius = Math.max(this.explosionWidth, this.explosionHeight) / 2; // 폭발 반경을 애니메이션 크기에 맞춤
 
     // 디버그용 상태 추적
     this.debugState = "";
@@ -684,11 +685,10 @@ class BossBomb {
             const dx = player.x - this.x;
             const dy = player.y - this.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            const maxDistance = Math.max(this.explosionWidth, this.explosionHeight) / 2;
 
-            if (distance <= maxDistance) {
+            if (distance <= this.explosionRadius) {
               // 거리에 따른 데미지 감소 (중심에 가까울수록 더 큰 데미지)
-              const damageRatio = Math.pow(1 - (distance / maxDistance), 2);
+              const damageRatio = Math.pow(1 - (distance / this.explosionRadius), 2);
               const damage = Math.max(1, this.damage * damageRatio); // 최소 데미지를 1로 설정
 
               player.takeDamage(damage);
@@ -704,7 +704,7 @@ class BossBomb {
               }
 
               console.log(
-                `폭발 데미지 적용: ${damage} (거리: ${distance}, 최대거리: ${maxDistance})`
+                `폭발 데미지 적용: ${damage} (거리: ${distance}, 최대거리: ${this.explosionRadius})`
               );
             }
           }
@@ -785,7 +785,16 @@ class BossBomb {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // 폭발 이펙트 그리기 (원래 크기 유지)
+        // 디버그 모드에서 폭발 범위 표시
+        if (showHitboxes) {
+          ctx.beginPath();
+          ctx.arc(0, 0, this.explosionRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // 폭발 이펙트 그리기
         ctx.drawImage(
           this.explodeSprite,
           sourceX,

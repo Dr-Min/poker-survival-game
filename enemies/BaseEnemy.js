@@ -104,15 +104,28 @@ export class BaseEnemy {
       this.attackAnimationStarted = true;
       this.lastAttackTime = now;
       
-      player.takeDamage(this.attackDamage);
-      if (window.game && window.game.ui) {
-        window.game.ui.addDamageText(
-          player.x,
-          player.y,
-          this.attackDamage,
-          "#ff0000"
-        );
-      }
+      // 공격 판정을 200ms 후에 적용
+      setTimeout(() => {
+        if (this.isAttacking && !player.invincible && !player.isDashInvincible) {
+          // 플레이어와의 거리 재계산
+          const currentDx = player.x - this.x;
+          const currentDy = player.y - this.y;
+          const currentDistance = Math.sqrt(currentDx * currentDx + currentDy * currentDy);
+          
+          if (currentDistance < attackRange) {
+            console.log('적에게 데미지 받음 (플레이어 무적 상태:', player.invincible, ', 대시 무적 상태:', player.isDashInvincible, ')');
+            player.takeDamage(this.attackDamage);
+            if (window.game && window.game.ui) {
+              window.game.ui.addDamageText(
+                player.x,
+                player.y,
+                this.attackDamage,
+                "#ff0000"
+              );
+            }
+          }
+        }
+      }, 200);
       
       return true;
     }
@@ -131,6 +144,33 @@ export class BaseEnemy {
       : this.isAttacking 
         ? this.attackSprite 
         : this.runSprite;
+
+    // 공격 판정 영역 표시 (공격 중일 때만)
+    if (this.isAttacking) {
+      const attackRange = (this.size + window.game.player.size) * 0.9;
+      
+      // 판정 영역 배경
+      ctx.save();
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = '#ff0000';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, attackRange, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // 판정 영역 테두리
+      ctx.globalAlpha = 0.8;
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // 데미지 텍스트
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '12px Arial';
+      ctx.fillText(`데미지: ${this.attackDamage}`, this.x - 30, this.y - attackRange - 5);
+      
+      ctx.restore();
+    }
 
     if (currentSprite && currentSprite.complete) {
       let frameIndex = this.frameIndex;
