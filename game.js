@@ -100,6 +100,10 @@ export class Game {
       currentBetPercent: 0,
     };
 
+    // 자동 발사 관련 속성 추가
+    this.lastAutoShootTime = 0;
+    this.autoShootInterval = 250; // 자동 발사 간격을 100ms (0.1초)로 변경
+
     // 이벤트 리스너 설정
     this.setupEventListeners();
     if (this.isMobile) {
@@ -393,42 +397,60 @@ export class Game {
   }
 
   setupMobileEventListeners() {
+    // 터치 이벤트 리스너
     this.canvas.addEventListener("touchstart", (e) => {
       e.preventDefault();
-      const touch = e.touches[0];
       const rect = this.canvas.getBoundingClientRect();
-      const x = touch.clientX - rect.left;
-      const y = touch.clientY - rect.top;
+      const scaleX = this.canvas.width / rect.width;
+      const scaleY = this.canvas.height / rect.height;
 
-      if (this.isInShootButton(x, y)) {
-        this.shoot();
-        return;
+      const touch = e.touches[0];
+      const x = (touch.clientX - rect.left) * scaleX;
+      const y = (touch.clientY - rect.top) * scaleY;
+
+      // 조이스틱 활성화
+      if (x < this.canvas.width / 2) {
+        this.joystick.active = true;
+        this.joystick.startX = x;
+        this.joystick.startY = y;
+        this.joystick.moveX = x;
+        this.joystick.moveY = y;
       }
 
-      this.joystick.active = true;
-      this.joystick.startX = x;
-      this.joystick.startY = y;
-      this.joystick.moveX = x;
-      this.joystick.moveY = y;
+      // 슈팅 버튼 처리
+      if (this.isInShootButton(x, y)) {
+        this.shoot();
+      }
+
+      // 플레이어 터치 이벤트 처리
+      this.player.handleTouchStart(e);
     });
 
     this.canvas.addEventListener("touchmove", (e) => {
       e.preventDefault();
-      if (!this.joystick.active) return;
+      const rect = this.canvas.getBoundingClientRect();
+      const scaleX = this.canvas.width / rect.width;
+      const scaleY = this.canvas.height / rect.height;
 
       const touch = e.touches[0];
-      const rect = this.canvas.getBoundingClientRect();
-      this.joystick.moveX = touch.clientX - rect.left;
-      this.joystick.moveY = touch.clientY - rect.top;
+      const x = (touch.clientX - rect.left) * scaleX;
+      const y = (touch.clientY - rect.top) * scaleY;
 
-      this.mouseX =
-        this.player.x + (this.joystick.moveX - this.joystick.startX) * 2;
-      this.mouseY =
-        this.player.y + (this.joystick.moveY - this.joystick.startY) * 2;
+      if (this.joystick.active) {
+        this.joystick.moveX = x;
+        this.joystick.moveY = y;
+      }
+
+      // 플레이어 터치 이벤트 처리
+      this.player.handleTouchMove(e);
     });
 
-    this.canvas.addEventListener("touchend", () => {
+    this.canvas.addEventListener("touchend", (e) => {
+      e.preventDefault();
       this.joystick.active = false;
+
+      // 플레이어 터치 이벤트 처리
+      this.player.handleTouchEnd();
     });
   }
 
@@ -443,9 +465,13 @@ export class Game {
 
     const dx = this.mouseX - this.player.x;
     const dy = this.mouseY - this.player.y;
+    
+    // 마우스/터치 위치가 플레이어와 같은 위치일 경우 발사하지 않음
+    if (dx === 0 && dy === 0) return;
+
     const distance = Math.sqrt(dx * dx + dy * dy);
-    const normalizedDx = (dx / distance) * 3.6;
-    const normalizedDy = (dy / distance) * 3.6;
+    const normalizedDx = (dx / distance) * 6;
+    const normalizedDy = (dy / distance) * 6;
 
     const effects = this.effects.getEffects();
     const bulletConfig = {
@@ -536,6 +562,13 @@ export class Game {
   update() {
     if (this.isPokerPhase) {
       return;
+    }
+
+    // 자동 발사 처리
+    const currentTime = Date.now();
+    if (currentTime - this.lastAutoShootTime >= this.autoShootInterval) {
+      this.shoot();
+      this.lastAutoShootTime = currentTime;
     }
 
     // 보스전 업데이트

@@ -67,14 +67,26 @@ export class Player {
     this.hitFrameDuration = 100; // json 파일 기준 duration
     this.hitLastFrameTime = 0;
     this.hitFrames = 2; // json 파일 기준 프레임 수
+
+    this.lastMouseX = 0;
+    this.lastMouseY = 0;
+    this.isTouching = false;
+    this.touchStartX = 0;
+    this.touchStartY = 0;
+    this.touchEndX = 0;
+    this.touchEndY = 0;
   }
 
   move(keys, mouseX, mouseY, joystick) {
     this.prevX = this.x;
     this.prevY = this.y;
 
-    // 마우스 방향에 따라 캐릭터 방향 설정 (반대로 수정)
-    this.facingLeft = mouseX > this.x;
+    // 터치나 마우스 방향에 따라 캐릭터 방향 설정
+    if (this.isTouching) {
+      this.facingLeft = this.touchEndX > this.x;
+    } else {
+      this.facingLeft = mouseX > this.x;
+    }
 
     // 대시 충전 업데이트
     const now = Date.now();
@@ -109,6 +121,21 @@ export class Player {
         this.isMoving = true;
         this.currentSprite = this.moveSprite;
         // 조이스틱 사용 시에도 마우스 방향 우선
+      } else {
+        this.isMoving = false;
+        this.currentSprite = this.idelSprite;
+      }
+    } else if (this.isTouching) {
+      // 터치 이동 처리
+      const dx = this.touchEndX - this.touchStartX;
+      const dy = this.touchEndY - this.touchStartY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance > 5) {
+        this.x += (dx / distance) * currentSpeed;
+        this.y += (dy / distance) * currentSpeed;
+        this.isMoving = true;
+        this.currentSprite = this.moveSprite;
       } else {
         this.isMoving = false;
         this.currentSprite = this.idelSprite;
@@ -161,6 +188,10 @@ export class Player {
   dash(targetX, targetY) {
     if (!this.canDash || this.isDashing || this.dashCharges <= 0) return;
 
+    // 터치나 마우스 좌표 사용
+    const dashTargetX = this.isTouching ? this.touchEndX : targetX;
+    const dashTargetY = this.isTouching ? this.touchEndY : targetY;
+
     console.log('대시 시작');
     this.isDashing = true;
     this.canDash = false;
@@ -173,7 +204,7 @@ export class Player {
     this.dashCharges = Math.floor(this.currentCharge);
 
     // 대시 방향 계산 (마우스 포인터 방향으로)
-    const angle = Math.atan2(targetY - this.y, targetX - this.x);
+    const angle = Math.atan2(dashTargetY - this.y, dashTargetX - this.x);
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
 
@@ -429,5 +460,25 @@ export class Player {
       y: this.y,
       radius: this.size / 2
     };
+  }
+
+  // 터치 이벤트 처리 메서드 추가
+  handleTouchStart(event) {
+    this.isTouching = true;
+    this.touchStartX = event.touches[0].clientX;
+    this.touchStartY = event.touches[0].clientY;
+    this.touchEndX = this.touchStartX;
+    this.touchEndY = this.touchStartY;
+  }
+
+  handleTouchMove(event) {
+    if (this.isTouching) {
+      this.touchEndX = event.touches[0].clientX;
+      this.touchEndY = event.touches[0].clientY;
+    }
+  }
+
+  handleTouchEnd() {
+    this.isTouching = false;
   }
 }
