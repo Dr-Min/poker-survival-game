@@ -2,14 +2,17 @@ export class Boss {
   constructor(round) {
     this.id = Date.now() + Math.random();
     this.round = round;
-    this.maxHp = (150 + (round - 1) * 75) * 5; // 체력 5배 증가
-    this.hp = this.maxHp;
+    this.chipBag = (150 + (round - 1) * 75) * 5; // maxHp를 chipBag으로 변경
+    this.chips = this.chipBag; // hp를 chips로 변경
     this.renderSize = 384; // 스프라이트 크기 절반으로 수정 (192 * 0.5)
     this.size = 40; // 히트박스를 렌더링 크기의 절반으로 설정
     this.cards = [];
     this.isDead = false;
     this.x = 600; // 화면 중앙
     this.y = 300; // 상단으로 위치 수정
+
+    // 칩 주머니 드랍 관련 속성 추가
+    this.bagDropAmount = Math.floor(20 + (round * 5)); // 라운드당 5씩 증가하는 주머니 크기
 
     // 애니메이션 스프라이트 로드
     this.sprites = {
@@ -231,19 +234,20 @@ export class Boss {
 
   takeDamage(amount) {
     const finalDamage = amount / this.defenseBonus;
-    this.hp = Math.max(0, this.hp - finalDamage);
-    if (this.hp <= 0) {
+    this.chips = Math.max(0, this.chips - finalDamage); // hp를 chips로 변경
+    if (this.chips <= 0) {
       this.isDead = true;
+      this.dropChipBag(); // 사망 시 칩 주머니 드랍
     }
     return this.isDead;
   }
 
   heal(amount) {
-    this.hp = Math.min(this.maxHp, this.hp + amount);
+    this.chips = Math.min(this.chipBag, this.chips + amount); // hp를 chips로, maxHp를 chipBag으로 변경
   }
 
   getHealthPercentage() {
-    return (this.hp / this.maxHp) * 100;
+    return (this.chips / this.chipBag) * 100; // hp를 chips로, maxHp를 chipBag으로 변경
   }
 
   // 포커 게임 결과 적용
@@ -601,6 +605,13 @@ export class Boss {
     }
 
     return null;
+  }
+
+  // 칩 주머니 드랍 메서드 추가
+  dropChipBag() {
+    if (window.game && window.game.player) {
+      window.game.player.increaseBagSize(this.bagDropAmount);
+    }
   }
 }
 

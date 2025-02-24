@@ -1,4 +1,5 @@
 import { getDistance, checkCollision } from "../utils.js";
+import { CardManager } from "../card.js";
 
 export class BaseEnemy {
   constructor(x, y, round) {
@@ -6,12 +7,15 @@ export class BaseEnemy {
     this.x = x;
     this.y = y;
     this.size = 20;
+    this.round = round;
     this.speed = 0.5 * (1 + round * 0.1);
-    this.hp = 5 + Math.floor(round * 1.5);
+    this.maxChips = 5 + Math.floor(round * 1.5);
+    this.chips = this.maxChips;
     this.isDead = false;
     this.isAlly = false;
     this.stunEndTime = 0;
     this.hasDroppedCard = false;
+    this.hasDroppedChips = false;
     this.isCountedAsKill = false;
     this.deathAnimationStarted = false;
 
@@ -34,6 +38,10 @@ export class BaseEnemy {
     this.attackFrames = 0; // 자식 클래스에서 설정
     this.attackDuration = 0; // 자식 클래스에서 설정
     this.damageFrame = 0; // 자식 클래스에서 설정
+
+    this.chipDropChance = 0.1;
+    this.minChipDrop = 2;
+    this.maxChipDrop = 5;
   }
 
   loadSprites(runSpritePath, deathSpritePath) {
@@ -104,10 +112,8 @@ export class BaseEnemy {
       this.attackAnimationStarted = true;
       this.lastAttackTime = now;
       
-      // 공격 판정을 200ms 후에 적용
       setTimeout(() => {
         if (this.isAttacking && !player.invincible && !player.isDashInvincible) {
-          // 플레이어와의 거리 재계산
           const currentDx = player.x - this.x;
           const currentDy = player.y - this.y;
           const currentDistance = Math.sqrt(currentDx * currentDx + currentDy * currentDy);
@@ -138,6 +144,50 @@ export class BaseEnemy {
     return true;
   }
 
+  takeDamage(amount) {
+    console.log(`적 데미지 받음: ${amount}, 현재 체력: ${this.chips}`);
+    this.chips = Math.max(0, this.chips - amount);
+    console.log(`남은 체력: ${this.chips}`);
+    
+    if (this.chips <= 0 && !this.isDead) {
+      console.log('적 사망 처리 시작');
+      this.isDead = true;
+      this.tryDropChips();
+      console.log('적 사망 처리 완료');
+      return true;
+    }
+    return false;
+  }
+
+  tryDropChips() {
+    console.log('칩 드랍 시도 - 이전 드랍 여부:', this.hasDroppedChips);
+    if (this.hasDroppedChips) {
+      console.log('이미 칩을 드랍했음');
+      return;
+    }
+    
+    if (Math.random() > this.chipDropChance) {
+      console.log('칩 드랍 실패 (확률)');
+      return;
+    }
+    
+    const roundBonus = Math.floor(window.game ? window.game.round * 0.5 : 0);
+    const minChips = this.minChipDrop + roundBonus;
+    const maxChips = this.maxChipDrop + roundBonus;
+    
+    const chipAmount = Math.floor(Math.random() * (maxChips - minChips + 1)) + minChips;
+    console.log(`칩 드랍 성공 - 개수: ${chipAmount}, 위치: (${this.x}, ${this.y})`);
+    
+    if (window.game) {
+      if (!window.game.cardManager) {
+        window.game.cardManager = new CardManager();
+      }
+      window.game.cardManager.createChipDrop(this.x, this.y, chipAmount);
+    }
+    
+    this.hasDroppedChips = true;
+  }
+
   draw(ctx) {
     const currentSprite = this.isDead 
       ? this.deathSprite 
@@ -145,11 +195,9 @@ export class BaseEnemy {
         ? this.attackSprite 
         : this.runSprite;
 
-    // 공격 판정 영역 표시 (공격 중일 때만)
     if (this.isAttacking) {
       const attackRange = (this.size + window.game.player.size) * 0.9;
       
-      // 판정 영역 배경
       ctx.save();
       ctx.globalAlpha = 0.2;
       ctx.fillStyle = '#ff0000';
@@ -157,13 +205,11 @@ export class BaseEnemy {
       ctx.arc(this.x, this.y, attackRange, 0, Math.PI * 2);
       ctx.fill();
       
-      // 판정 영역 테두리
       ctx.globalAlpha = 0.8;
       ctx.strokeStyle = '#ff0000';
       ctx.lineWidth = 2;
       ctx.stroke();
       
-      // 데미지 텍스트
       ctx.globalAlpha = 1;
       ctx.fillStyle = '#ffffff';
       ctx.font = '12px Arial';
@@ -229,14 +275,22 @@ export class BaseEnemy {
           healthBarHeight
         );
 
-        const currentHealthWidth = (this.hp / 5) * healthBarWidth;
-        ctx.fillStyle = this.isAlly ? "#00ff00" : "#ff0000";
+        // 현재 체력 비율 계산 (저장된 최대 체력 사용)
+        const healthRatio = this.chips / this.maxChips;
+        const currentHealthWidth = healthBarWidth * healthRatio;
+
+        ctx.fillStyle = this.isAlly ? "#00ff00" : "#ffff00";
         ctx.fillRect(
           this.x - healthBarWidth / 2,
           healthBarY,
           currentHealthWidth,
           healthBarHeight
         );
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`${Math.ceil(this.chips)}칩`, this.x, healthBarY - 2);
       }
     } else {
       ctx.fillStyle = this.isAlly ? "#00ff00" : "white";

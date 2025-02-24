@@ -110,6 +110,7 @@ export class Game {
       this.setupMobileEventListeners();
     }
     this.gameLoop(); // startGame() 대신 gameLoop() 직접 호출
+    window.game = this; // window.game 설정 추가
   }
 
   handleResize = () => {
@@ -523,26 +524,63 @@ export class Game {
   }
 
   startGame() {
+    // 게임 상태 초기화
     this.isGameOver = false;
-    this.score = 0;
+    this.isPaused = false;
+    this.isPokerPhase = false;
     this.round = 1;
-    this.enemiesKilledInRound = 0;
-    this.enemiesRequiredForNextRound = 10;
-    this.roundStartTime = Date.now();
-    this.isSpawningEnemies = true;
-
-    // 플레이어 초기화
+    this.score = 0;
+    
+    // 전역 게임 객체 설정
+    window.game = this;
+    
+    // 게임 요소 초기화
     this.player = new Player(this.canvas);
-
-    // 매니저 클래스 초기화
     this.cardManager = new CardManager();
     this.enemyManager = new EnemyManager(this.cardManager, this);
     this.bulletManager = new BulletManager(this);
-    this.bulletManager.setUI(this.ui);
-
-    // 효과 시스템 초기화
     this.effects = new Effects();
+    this.ui = new UI(this.canvas);
+    this.bulletManager.setUI(this.ui);
+    
+    // 효과 시스템 초기화
     this.currentWeapon = this.effects.weaponSystem.getCurrentWeapon();
+
+    // 라운드 시스템 초기화
+    this.enemiesKilledInRound = 0;
+    this.enemiesRequiredForNextRound = 10;
+    this.roundStartTime = Date.now();
+    this.roundDuration = 25000; // 25초로 수정
+    this.isRoundTransition = false;
+    this.roundTransitionDuration = 3000;
+    this.roundTransitionStartTime = 0;
+    this.isSpawningEnemies = true;
+
+    // 디버그 옵션 초기화
+    this.debugOptions = {
+      selectedCard: { type: "spade", number: 1 },
+      cardTypes: ["spade", "heart", "diamond", "clover"],
+      cardNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+      ricochetChance: 1.0,
+      showHitboxes: false, // 히트박스 표시 여부
+    };
+
+    // 보스전 관련 상태 추가
+    this.boss = null;
+    this.pokerSystem = new PokerSystem();
+    this.isBossBattle = false;
+    this.selectedCards = [];
+    this.pokerState = {
+      currentTurn: null, // 'player' or 'boss'
+      phase: "selection", // 'selection', 'betting', 'showdown'
+      lastAction: null,
+      lastBet: 0,
+      currentBetPercent: 0,
+    };
+
+    // 자동 발사 관련 속성 추가
+    this.lastAutoShootTime = 0;
+    this.autoShootInterval = 250; // 자동 발사 간격을 100ms (0.1초)로 변경
   }
 
   gameLoop() {
@@ -560,6 +598,8 @@ export class Game {
   }
 
   update() {
+    if (this.isGameOver) return;
+    
     if (this.isPokerPhase) {
       return;
     }

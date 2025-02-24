@@ -86,6 +86,7 @@ export class CardManager {
   constructor() {
     this.cards = [];
     this.collectedCards = [];
+    this.chipDrops = [];
     this.cardImages = {
       spade: {},
       heart: {},
@@ -133,10 +134,108 @@ export class CardManager {
     }
   }
 
+  createChipDrop(x, y, amount) {
+    console.log(`칩 드랍 생성: 위치(${x}, ${y}), 개수: ${amount}`);
+    this.chipDrops.push({
+      x,
+      y,
+      amount: Math.round(amount),
+      size: 7.5,
+      collected: false,
+      createdAt: Date.now(),
+      dx: (Math.random() - 0.5) * 4,
+      dy: (Math.random() - 0.5) * 4,
+    });
+  }
+
+  updateChipDrops(player) {
+    console.log(`칩 드랍 업데이트: 현재 칩 개수: ${this.chipDrops.length}`);
+    for (let i = this.chipDrops.length - 1; i >= 0; i--) {
+      const chip = this.chipDrops[i];
+      
+      if (Date.now() - chip.createdAt < 500) {
+        chip.x += chip.dx;
+        chip.y += chip.dy;
+        chip.dx *= 0.9;
+        chip.dy *= 0.9;
+      } else {
+        const dx = player.x - chip.x;
+        const dy = player.y - chip.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < 150) {
+          const speed = 0.1 + (1 - distance / 150) * 0.3;
+          chip.x += dx * speed;
+          chip.y += dy * speed;
+        }
+      }
+
+      const dx = player.x - chip.x;
+      const dy = player.y - chip.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < player.size + chip.size) {
+        console.log(`칩 획득: ${chip.amount}개`);
+        player.heal(Math.round(chip.amount));
+        this.chipDrops.splice(i, 1);
+      }
+    }
+  }
+
+  drawChipDrops(ctx) {
+    for (const chip of this.chipDrops) {
+      // 그림자 효과
+      ctx.beginPath();
+      ctx.arc(chip.x + 2, chip.y + 2, chip.size, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+      ctx.fill();
+
+      // 칩 외부 테두리
+      ctx.beginPath();
+      ctx.arc(chip.x, chip.y, chip.size, 0, Math.PI * 2);
+      ctx.fillStyle = "#FFD700";
+      ctx.fill();
+      ctx.strokeStyle = "#B8860B";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 칩 내부 원
+      ctx.beginPath();
+      ctx.arc(chip.x, chip.y, chip.size * 0.8, 0, Math.PI * 2);
+      ctx.fillStyle = "#DAA520";
+      ctx.fill();
+
+      // 칩 장식 패턴
+      for (let i = 0; i < 8; i++) {
+        const angle = (i * Math.PI) / 4;
+        const x = chip.x + Math.cos(angle) * (chip.size * 0.6);
+        const y = chip.y + Math.sin(angle) * (chip.size * 0.6);
+        
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fillStyle = "#FFD700";
+        ctx.fill();
+      }
+
+      // 칩 수량 텍스트
+      ctx.font = "bold 14px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      
+      // 텍스트 테두리
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 3;
+      ctx.strokeText(chip.amount.toString(), chip.x, chip.y);
+      
+      // 텍스트
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText(chip.amount.toString(), chip.x, chip.y);
+    }
+  }
+
   updateCards(player, effects) {
     const now = Date.now();
     this.cards = this.cards.filter((card) => {
-      // 7초가 지난 카드는 제거
       if (now - card.createdAt > 7000) {
         return false;
       }
@@ -147,20 +246,22 @@ export class CardManager {
       }
       return true;
     });
+
+    this.updateChipDrops(player);
   }
 
   collectCard(type, number) {
     this.collectedCards.push({ type, number });
     if (this.collectedCards.length > 5) {
-      // 가장 먼저 들어온 카드를 제거 (FIFO)
       this.collectedCards.shift();
-      return true; // 카드가 교체되었음을 알림
+      return true;
     }
-    return false; // 카드가 교체되지 않음
+    return false;
   }
 
   drawCards(ctx) {
     this.cards.forEach((card) => card.draw(ctx, this.cardImages));
+    this.drawChipDrops(ctx);
   }
 
   getCollectedCards() {

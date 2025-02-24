@@ -6,7 +6,6 @@ export class FourLegsEnemy extends BaseEnemy {
     this.size = 10;
     this.renderSize = 100;
     this.speed = 0.7 * (1 + round * 0.1);
-    this.hp = 4 + Math.floor(round * 1.2);
 
     this.runSpriteUp = new Image();
     this.runSpriteUp.src = "../sprite/4legs/4legs_run_up.png";
@@ -103,7 +102,7 @@ export class FourLegsEnemy extends BaseEnemy {
           healthBarHeight
         );
 
-        const currentHealthWidth = (this.hp / 5) * healthBarWidth;
+        const currentHealthWidth = (this.chips / this.maxChips) * healthBarWidth;
         ctx.fillStyle = this.isAlly ? "#00ff00" : "#ff0000";
         ctx.fillRect(
           this.x - healthBarWidth / 2,
@@ -111,6 +110,11 @@ export class FourLegsEnemy extends BaseEnemy {
           currentHealthWidth,
           healthBarHeight
         );
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`${Math.ceil(this.chips)}칩`, this.x, healthBarY - 2);
       }
     } else {
       ctx.fillStyle = this.isAlly ? "#00ff00" : "white";

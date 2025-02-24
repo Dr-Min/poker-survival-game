@@ -651,7 +651,7 @@ export class BulletManager {
     if (effects.diamond.count >= 2) enemy.stunEndTime = Date.now() + 1000;
 
     // 데미지 적용
-    enemy.hp -= damage;
+    const isDead = enemy.takeDamage(damage);
     bullet.hitEnemies.push(enemy.id);
 
     // 데미지 텍스트 표시
@@ -706,8 +706,7 @@ export class BulletManager {
     }
 
     // 적 처치 체크
-    if (enemy.hp <= 0) {
-      enemy.isDead = true;
+    if (isDead) {
       console.log("적 처치됨:", {
         enemyId: enemy.id,
         position: { x: enemy.x, y: enemy.y },
@@ -745,7 +744,7 @@ export class BulletManager {
         if (distance < radius) {
           // 폭발 중심으로부터의 방향 계산
           const angle = Math.atan2(dy, dx);
-          const knockbackDistance = (radius - distance) * 2; // 넉백 거리 4배 증가
+          const knockbackDistance = (radius - distance) * 2;
 
           const oldPos = { x: enemy.x, y: enemy.y };
 
@@ -757,7 +756,7 @@ export class BulletManager {
           enemy.x = Math.max(enemy.size, Math.min(1200 - enemy.size, enemy.x));
           enemy.y = Math.max(enemy.size, Math.min(800 - enemy.size, enemy.y));
 
-          const damageMultiplier = Math.max(0.5, 1 - distance / radius); // 최소 데미지를 50%로 설정
+          const damageMultiplier = Math.max(0.5, 1 - distance / radius);
           const explosionDamage = damage * damageMultiplier;
 
           console.log("적 폭발 영향받음:", {
@@ -771,7 +770,7 @@ export class BulletManager {
             damage: explosionDamage,
           });
 
-          enemy.hp -= explosionDamage;
+          const isDead = enemy.takeDamage(explosionDamage);
           affectedEnemies.push(enemy);
 
           // 다이아몬드 범위 감속 효과
@@ -779,9 +778,7 @@ export class BulletManager {
             enemy.speed *= 0.7;
           }
 
-          if (enemy.hp <= 0) {
-            enemy.isDead = true;
-
+          if (isDead) {
             // 클로버 2차 폭발
             if (effects.clover.count >= 4) {
               console.log("2차 폭발 발생:", {

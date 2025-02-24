@@ -7,8 +7,8 @@ export class Player {
     this.y = canvas.height / 2;
     this.size = 20;
     this.speed = 1.6;
-    this.hp = 10;
-    this.maxHp = 10;
+    this.chips = 10;
+    this.chipBag = 10;
     this.invincible = false;
     this.invincibleTime = 2000;
     this.isDashInvincible = false;
@@ -400,13 +400,13 @@ export class Player {
   takeDamage(amount) {
     if (this.invincible || this.isDashInvincible) return false;
 
-    this.hp = Math.max(0, this.hp - amount);
+    this.chips = Math.max(0, this.chips - amount);
     this.invincible = true;
     this.isHit = true;
     this.hitFrameIndex = 0;
     this.hitLastFrameTime = Date.now();
 
-    // 데미지 텍스트 표시
+    // 데미지 텍스트 표시 (숫자만 표시)
     if (window.game && window.game.ui) {
       window.game.ui.addDamageText(
         this.x,
@@ -420,7 +420,7 @@ export class Player {
     setTimeout(() => {
       this.isHit = false;
       this.hitFrameIndex = 0;
-    }, this.hitFrameDuration * this.hitFrames); // 히트 애니메이션 전체 재생 시간만큼 대기
+    }, this.hitFrameDuration * this.hitFrames);
 
     setTimeout(() => {
       this.invincible = false;
@@ -430,7 +430,30 @@ export class Player {
   }
 
   heal(amount) {
-    this.hp = Math.min(this.maxHp, this.hp + amount);
+    this.chips = Math.min(this.chipBag, this.chips + amount);
+    // 칩 획득 텍스트 표시
+    if (window.game && window.game.ui) {
+      window.game.ui.addDamageText(
+        this.x,
+        this.y,
+        Math.round(amount), // 문자열 포맷팅 제거하고 숫자만 전달
+        "#00ff00"
+      );
+    }
+  }
+
+  // 칩 주머니 크기 증가 메서드 추가
+  increaseBagSize(amount) {
+    this.chipBag += amount;
+    // 칩 주머니 크기 증가 텍스트 표시
+    if (window.game && window.game.ui) {
+      window.game.ui.addDamageText(
+        this.x,
+        this.y,
+        `+${Math.round(amount)} 주머니 크기`,
+        "#ffff00"
+      );
+    }
   }
 
   // 원형 충돌 체크 메서드 추가

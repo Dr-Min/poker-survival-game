@@ -188,72 +188,87 @@ export class UI {
   }
 
   drawHealthBar(player) {
-    const healthBarWidth = 200;
-    const healthBarHeight = 20;
-    const healthBarX = 20;
-    const healthBarY = 210;
+    const chipCounterWidth = 200;
+    const chipCounterHeight = 20;
+    const chipCounterX = 20;
+    const chipCounterY = 210;
 
-    // 체력바 배경
+    // 칩 카운터 배경
     this.ctx.fillStyle = "#444444";
-    this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+    this.ctx.fillRect(chipCounterX, chipCounterY, chipCounterWidth, chipCounterHeight);
 
-    // 현재 체력
-    const currentHealthWidth = (player.hp / player.maxHp) * healthBarWidth;
-    this.ctx.fillStyle = "#ff0000";
+    // 현재 칩 수량
+    const currentChipsWidth = (player.chips / player.chipBag) * chipCounterWidth;
+    this.ctx.fillStyle = "#ffff00"; // 칩 색상을 노란색으로 변경
     this.ctx.fillRect(
-      healthBarX,
-      healthBarY,
-      currentHealthWidth,
-      healthBarHeight
+      chipCounterX,
+      chipCounterY,
+      currentChipsWidth,
+      chipCounterHeight
     );
 
-    // 체력바 테두리
+    // 칩 카운터 테두리
     this.ctx.strokeStyle = "#ffffff";
     this.ctx.strokeRect(
-      healthBarX,
-      healthBarY,
-      healthBarWidth,
-      healthBarHeight
+      chipCounterX,
+      chipCounterY,
+      chipCounterWidth,
+      chipCounterHeight
+    );
+
+    // 칩 수량 텍스트
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "14px Arial";
+    this.ctx.textAlign = "center";
+    this.ctx.fillText(
+      `${Math.ceil(player.chips)} / ${player.chipBag} 칩`,
+      chipCounterX + chipCounterWidth / 2,
+      chipCounterY + chipCounterHeight / 2 + 5
     );
   }
 
   drawBossHealthBar(boss) {
-    const healthBarWidth = 400;
-    const healthBarHeight = 30;
-    const healthBarX = (this.canvas.width - healthBarWidth) / 2;
-    const healthBarY = 20;
+    const bossChipCounterWidth = 600;
+    const bossChipCounterHeight = 30;
+    const bossChipCounterX = (this.canvas.width - bossChipCounterWidth) / 2;
+    const bossChipCounterY = 20;
 
-    // 체력바 배경
+    // 보스 칩 카운터 배경
     this.ctx.fillStyle = "#444444";
-    this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
-
-    // 현재 체력
-    const currentHealthWidth = (boss.hp / boss.maxHp) * healthBarWidth;
-    this.ctx.fillStyle = "#ff0000";
     this.ctx.fillRect(
-      healthBarX,
-      healthBarY,
-      currentHealthWidth,
-      healthBarHeight
+      bossChipCounterX,
+      bossChipCounterY,
+      bossChipCounterWidth,
+      bossChipCounterHeight
     );
 
-    // 체력바 테두리
+    // 현재 보스 칩 수량
+    const currentBossChipsWidth = (boss.chips / boss.chipBag) * bossChipCounterWidth;
+    this.ctx.fillStyle = "#ffff00"; // 칩 색상을 노란색으로 변경
+    this.ctx.fillRect(
+      bossChipCounterX,
+      bossChipCounterY,
+      currentBossChipsWidth,
+      bossChipCounterHeight
+    );
+
+    // 보스 칩 카운터 테두리
     this.ctx.strokeStyle = "#ffffff";
     this.ctx.strokeRect(
-      healthBarX,
-      healthBarY,
-      healthBarWidth,
-      healthBarHeight
+      bossChipCounterX,
+      bossChipCounterY,
+      bossChipCounterWidth,
+      bossChipCounterHeight
     );
 
-    // 보스 체력 텍스트
-    this.ctx.fillStyle = "white";
-    this.ctx.font = "20px Arial";
+    // 보스 칩 수량 텍스트
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "16px Arial";
     this.ctx.textAlign = "center";
     this.ctx.fillText(
-      `보스 HP: ${Math.ceil(boss.hp)}/${boss.maxHp}`,
-      this.canvas.width / 2,
-      healthBarY + healthBarHeight + 20
+      `보스 칩: ${Math.ceil(boss.chips)} / ${boss.chipBag}`,
+      bossChipCounterX + bossChipCounterWidth / 2,
+      bossChipCounterY + bossChipCounterHeight / 2 + 6
     );
   }
 

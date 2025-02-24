@@ -6,7 +6,6 @@ export class TwoLegsEnemy extends BaseEnemy {
     this.size = 20;
     this.renderSize = 83;
     this.speed = 0.5 * (1 + round * 0.1);
-    this.hp = 5 + Math.floor(round * 1.5);
 
     this.runSpriteUp = new Image();
     this.runSpriteUp.src = "./sprite/2legs/2legs_run_up.png";
@@ -97,7 +96,7 @@ export class TwoLegsEnemy extends BaseEnemy {
           healthBarHeight
         );
 
-        const currentHealthWidth = (this.hp / 5) * healthBarWidth;
+        const currentHealthWidth = (this.chips / this.maxChips) * healthBarWidth;
         ctx.fillStyle = this.isAlly ? "#00ff00" : "#ff0000";
         ctx.fillRect(
           this.x - healthBarWidth / 2,
@@ -105,6 +104,11 @@ export class TwoLegsEnemy extends BaseEnemy {
           currentHealthWidth,
           healthBarHeight
         );
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`${Math.ceil(this.chips)}칩`, this.x, healthBarY - 2);
       }
     } else {
       ctx.fillStyle = this.isAlly ? "#00ff00" : "white";
