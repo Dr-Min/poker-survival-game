@@ -23,7 +23,7 @@ export class FourLegsEnemy extends BaseEnemy {
     this.attackDuration = 75;
     this.attackTicksPerFrame = 5;
     this.damageFrame = 4;
-    this.attackDamage = 1;
+    this.attackDamage = 10;
   }
 
   draw(ctx) {

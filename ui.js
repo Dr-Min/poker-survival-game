@@ -236,22 +236,26 @@ export class UI {
   }
 
   drawBossHealthBar(boss) {
+    // 보스 객체 유효성 검사
     if (!boss || typeof boss.chips === 'undefined' || typeof boss.chipBag === 'undefined') {
-      console.log('보스 체력바 그리기 실패:', { boss: boss ? '존재' : '없음', chips: boss?.chips, chipBag: boss?.chipBag });
+      console.log('보스 체력바 그리기 실패:', {
+        boss: boss ? '존재' : '없음',
+        chips: boss?.chips,
+        chipBag: boss?.chipBag
+      });
       return;
     }
 
-    const bossChipCounterWidth = 600;
-    const bossChipCounterHeight = 30;
-    const bossChipCounterX = (this.canvas.width - bossChipCounterWidth) / 2;
-    const bossChipCounterY = 20;
-
-    // 보스 체력 정보 로깅
     console.log('보스 체력 정보:', {
       현재체력: boss.chips,
       최대체력: boss.chipBag,
       비율: boss.chips / boss.chipBag
     });
+
+    const bossChipCounterWidth = 600;
+    const bossChipCounterHeight = 30;
+    const bossChipCounterX = (this.canvas.width - bossChipCounterWidth) / 2;
+    const bossChipCounterY = 20;
 
     // 보스 칩 카운터 배경
     this.ctx.fillStyle = "#444444";
@@ -691,97 +695,23 @@ export class UI {
   }
 
   drawRoundTransition(round) {
-    // 반투명 배경 그라데이션
-    const gradient = this.ctx.createRadialGradient(
-      this.canvas.width / 2,
-      this.canvas.height / 2,
-      0,
-      this.canvas.width / 2,
-      this.canvas.height / 2,
-      this.canvas.width / 2
-    );
-    gradient.addColorStop(0, "rgba(0, 0, 0, 0.85)");
-    gradient.addColorStop(1, "rgba(0, 0, 0, 0.95)");
-    this.ctx.fillStyle = gradient;
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-    // 라운드 클리어 텍스트 (빛나는 효과)
+    // 화면 중앙 상단에 라운드 클리어 메시지 표시
     this.ctx.save();
-    this.ctx.shadowColor = "#ffff00";
-    this.ctx.shadowBlur = 20;
-    this.ctx.fillStyle = "#ffffff";
-    this.ctx.font = "bold 64px Arial";
+    
+    // 텍스트 스타일 설정
+    this.ctx.font = "bold 48px Arial";
     this.ctx.textAlign = "center";
-    this.ctx.fillText(
-      `라운드 ${round} 클리어!`,
-      this.canvas.width / 2,
-      this.canvas.height / 2 - 80
-    );
+    this.ctx.textBaseline = "middle";
+    
+    // 텍스트 그림자 효과
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    this.ctx.fillText(`Round ${round} Clear`, this.canvas.width / 2 + 2, this.canvas.height / 3 + 2);
+    
+    // 메인 텍스트
+    this.ctx.fillStyle = "#FFD700"; // 골드 색상
+    this.ctx.fillText(`Round ${round} Clear`, this.canvas.width / 2, this.canvas.height / 3);
+    
     this.ctx.restore();
-
-    // 다음 라운드 정보 박스
-    const boxWidth = 500;
-    const boxHeight = 180;
-    const boxX = (this.canvas.width - boxWidth) / 2;
-    const boxY = this.canvas.height / 2 - 20;
-
-    // 박스 배경
-    this.ctx.fillStyle = "rgba(50, 50, 50, 0.8)";
-    this.ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-
-    // 박스 테두리
-    this.ctx.strokeStyle = "#666666";
-    this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
-
-    // 다음 라운드 정보
-    this.ctx.fillStyle = "#00ffff";
-    this.ctx.font = "28px Arial";
-    this.ctx.fillText(`다음 라운드 정보`, this.canvas.width / 2, boxY + 40);
-
-    // 적 정보
-    this.ctx.fillStyle = "#ff9999";
-    this.ctx.font = "24px Arial";
-    this.ctx.fillText(
-      `- 적 체력: ${5 + Math.floor((round + 1) * 1.5)}`,
-      this.canvas.width / 2,
-      boxY + 80
-    );
-    this.ctx.fillText(
-      `- 적 속도: ${Math.round((1 + (round + 1) * 0.1) * 100)}%`,
-      this.canvas.width / 2,
-      boxY + 110
-    );
-
-    // 보스전 알림
-    if ((round + 1) % 5 === 0) {
-      this.ctx.fillStyle = "#ff0000";
-      this.ctx.font = "bold 32px Arial";
-      this.ctx.fillText(
-        "⚠ 다음은 보스전 입니다! ⚠",
-        this.canvas.width / 2,
-        boxY + 150
-      );
-    } else {
-      this.ctx.fillStyle = "#ffffff";
-      this.ctx.font = "24px Arial";
-      this.ctx.fillText(
-        `다음 보스전까지 ${5 - ((round + 1) % 5)}라운드`,
-        this.canvas.width / 2,
-        boxY + 150
-      );
-    }
-
-    // 준비 메시지 (깜빡이는 효과)
-    this.ctx.fillStyle = `rgba(255, 255, 255, ${
-      0.5 + Math.sin(Date.now() / 300) * 0.5
-    })`;
-    this.ctx.font = "32px Arial";
-    this.ctx.fillText(
-      "준비하세요...",
-      this.canvas.width / 2,
-      this.canvas.height - 100
-    );
   }
 
   countActiveEffects(effectGroup) {
@@ -1569,14 +1499,22 @@ export class UI {
       this.canvas.height / 3
     );
 
-    // 잉여 칩 표시
-    this.ctx.fillStyle = "#ffffff";
-    this.ctx.font = "32px Arial";
-    this.ctx.fillText(
-      `최종 잉여 칩: ${Math.floor(gameState.player.surplusChips)}`,
-      this.canvas.width / 2,
-      this.canvas.height / 2 - 40
-    );
+    // 플레이어 정보 표시
+    if (gameState.player) {
+      this.ctx.fillStyle = "#ffffff";
+      this.ctx.font = "32px Arial";
+      this.ctx.fillText(
+        `최종 칩: ${Math.floor(gameState.player.chips)} / ${gameState.player.chipBag}`,
+        this.canvas.width / 2,
+        this.canvas.height / 2 - 80
+      );
+      this.ctx.fillText(
+        `잉여 칩: ${Math.floor(gameState.player.surplusChips)}`,
+        this.canvas.width / 2,
+        this.canvas.height / 2 - 40
+      );
+    }
+
     this.ctx.fillText(
       `도달 라운드: ${gameState.round}`,
       this.canvas.width / 2,

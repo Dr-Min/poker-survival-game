@@ -418,6 +418,12 @@ export class Player {
       );
     }
 
+    // 체력이 0이 되면 게임오버 처리
+    if (this.chips <= 0 && window.game) {
+      window.game.stopGame();
+      return true;
+    }
+
     // 히트 애니메이션 종료 타이머 추가
     setTimeout(() => {
       this.isHit = false;

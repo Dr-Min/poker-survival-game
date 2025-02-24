@@ -2,18 +2,22 @@ export class Boss {
   constructor(canvas, round = 1) {
     this.canvas = canvas;
     this.round = Math.max(1, round || 1);
-    this.x = canvas.width / 2;
-    this.y = 100;
-    this.size = 40;
-    this.speed = 0.8 + (this.round * 0.05);
-    this.chipBag = Math.max(15000, (1500 + ((this.round - 1) * 750))); // 10배로 증가
+    
+    // 체력 관련 속성 초기화
+    this.chipBag = Math.max(15000, (1500 + ((this.round - 1) * 750)));
     this.chips = this.chipBag;
-    this.damage = (20 + Math.floor(this.round * 8)); // 10배로 증가
-    this.renderSize = 384; // 스프라이트 크기 절반으로 수정 (192 * 0.5)
-    this.cards = [];
-    this.isDead = false;
+    this.damage = (20 + Math.floor(this.round * 8));
+    
+    // 위치 관련 속성 초기화 (한 번만)
     this.x = 600; // 화면 중앙
     this.y = 300; // 상단으로 위치 수정
+    this.size = 40;
+    this.speed = 0.8 + (this.round * 0.05);
+    
+    // 렌더링 관련 속성
+    this.renderSize = 384;
+    this.cards = [];
+    this.isDead = false;
 
     // 칩 주머니 드랍 관련 속성 추가
     this.bagDropAmount = (200 + (this.round * 50)); // 10배로 증가
@@ -257,11 +261,24 @@ export class Boss {
   // 포커 게임 결과 적용
   applyPokerResult(result) {
     if (result.winner === "boss") {
-      this.attackBonus = 1.5; // 공격력 50% 증가
-      this.defenseBonus = 1.3; // 방어력 30% 증가
+      this.attackBonus = 1.5;
+      this.defenseBonus = 1.3;
     } else {
-      this.attackBonus = 0.7; // 공격력 30% 감소
-      this.defenseBonus = 0.8; // 방어력 20% 감소
+      this.attackBonus = 0.7;
+      this.defenseBonus = 0.8;
+      // 보스가 졌을 때 체력 감소
+      const damage = this.chipBag * 0.2; // 최대 체력의 20%
+      this.chips = Math.max(0, this.chips - damage);
+      
+      // 데미지 텍스트 표시
+      if (window.game && window.game.ui) {
+        window.game.ui.addDamageText(
+          this.x,
+          this.y,
+          Math.round(damage),
+          "#ff0000"
+        );
+      }
     }
   }
 

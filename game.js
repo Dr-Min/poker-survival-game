@@ -820,15 +820,22 @@ export class Game {
         score: this.score,
         round: this.round,
         cards: this.cardManager.getCollectedCards(),
+        player: this.player
       });
     }
   }
 
   stopGame() {
     this.isGameOver = true;
-    if (this.gameLoopId) {
-      cancelAnimationFrame(this.gameLoopId);
-    }
+    // gameLoop는 계속 실행되도록 cancelAnimationFrame 제거
+    
+    // 게임오버 화면 표시
+    this.ui.drawGameOverScreen({
+      score: this.score,
+      round: this.round,
+      cards: this.cardManager.getCollectedCards(),
+      player: this.player
+    });
   }
 
   checkRoundProgress() {
@@ -1029,21 +1036,21 @@ export class Game {
       case "call":
         this.pokerState.phase = "showdown";
         // 쇼다운 시작 시간 설정 및 게임 결과 저장
-        this.pokerSystem.saveGameResult();
-
-        // 결과에 따른 데미지 처리는 보스전 시작 시에 수행
-        const winner = this.pokerSystem.determineWinner();
+        const gameResult = this.pokerSystem.saveGameResult();
+        
+        // 결과에 따른 데미지 처리
         const totalBetPercent = 60 + this.pokerState.currentBetPercent;
-
-        if (winner === "player") {
+        
+        if (gameResult.winner === "player") {
           // 보스는 총 배팅의 2/3만큼 데미지
-          const bossDamage =
-            this.boss.maxHp * (((totalBetPercent / 100) * 2) / 3);
+          const bossDamage = this.boss.chipBag * (((totalBetPercent / 100) * 2) / 3);
           this.boss.takeDamage(bossDamage);
+          console.log('보스 데미지:', bossDamage);
         } else {
           // 플레이어는 총 배팅만큼 데미지
-          const playerDamage = this.player.maxHp * (totalBetPercent / 100);
-          this.player.hp = Math.max(1, this.player.hp - playerDamage);
+          const playerDamage = this.player.chipBag * (totalBetPercent / 100);
+          this.player.chips = Math.max(1, this.player.chips - playerDamage);
+          console.log('플레이어 데미지:', playerDamage);
         }
         break;
     }
