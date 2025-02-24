@@ -1,18 +1,22 @@
 export class Boss {
-  constructor(round) {
-    this.id = Date.now() + Math.random();
-    this.round = round;
-    this.chipBag = (150 + (round - 1) * 75) * 5; // maxHp를 chipBag으로 변경
-    this.chips = this.chipBag; // hp를 chips로 변경
+  constructor(canvas, round = 1) {
+    this.canvas = canvas;
+    this.round = Math.max(1, round || 1);
+    this.x = canvas.width / 2;
+    this.y = 100;
+    this.size = 40;
+    this.speed = 0.8 + (this.round * 0.05);
+    this.chipBag = Math.max(15000, (1500 + ((this.round - 1) * 750))); // 10배로 증가
+    this.chips = this.chipBag;
+    this.damage = (20 + Math.floor(this.round * 8)); // 10배로 증가
     this.renderSize = 384; // 스프라이트 크기 절반으로 수정 (192 * 0.5)
-    this.size = 40; // 히트박스를 렌더링 크기의 절반으로 설정
     this.cards = [];
     this.isDead = false;
     this.x = 600; // 화면 중앙
     this.y = 300; // 상단으로 위치 수정
 
     // 칩 주머니 드랍 관련 속성 추가
-    this.bagDropAmount = Math.floor(20 + (round * 5)); // 라운드당 5씩 증가하는 주머니 크기
+    this.bagDropAmount = (200 + (this.round * 50)); // 10배로 증가
 
     // 애니메이션 스프라이트 로드
     this.sprites = {
@@ -151,7 +155,7 @@ export class Boss {
     this.jumpStartX = 0;
     this.jumpStartY = 0;
     this.jumpPhase = "none"; // 'none', 'jump', 'indicator', 'slam'
-    this.slamDamage = 5;
+    this.slamDamage = 50; // 10배로 증가 (기존 5의 10배)
     this.slamRadius = 150;
 
     // 인디케이터 위치 추가
@@ -326,7 +330,7 @@ export class Boss {
   }
 
   throwBomb(player, angleOffset = 0) {
-    const baseAttack = 3 * this.attackBonus;
+    const baseAttack = 30 * this.attackBonus; // 3에서 30으로 증가 (10배)
 
     // 기본 각도 계산 (보스에서 플레이어 방향)
     const baseAngle = Math.atan2(player.y - this.y, player.x - this.x);
@@ -341,13 +345,13 @@ export class Boss {
     const targetX = this.x + Math.cos(angle) * distance;
     const targetY = this.y + Math.sin(angle) * distance;
 
-    // 폭탄 생성 (데미지를 3으로 고정)
+    // 폭탄 생성 (데미지를 30으로 설정)
     const bomb = new BossBomb({
       x: this.x,
       y: this.y,
       targetX: targetX,
       targetY: targetY,
-      damage: 3, // 최대 데미지를 3으로 고정
+      damage: 30, // 3에서 30으로 증가 (10배)
       initialSpeed: 15,
       explosionRadius: 100,
       explodeSprite: this.explodeSprite,

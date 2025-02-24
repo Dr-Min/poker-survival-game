@@ -9,7 +9,7 @@ export class BaseEnemy {
     this.size = 20;
     this.round = round;
     this.speed = 0.5 * (1 + round * 0.1);
-    this.maxChips = 5 + Math.floor(round * 1.5);
+    this.maxChips = (5 + Math.floor(round * 1.5)) * 10; // 10배로 증가
     this.chips = this.maxChips;
     this.isDead = false;
     this.isAlly = false;
@@ -28,7 +28,7 @@ export class BaseEnemy {
     this.deathAnimationComplete = false;
 
     this.isAttacking = false;
-    this.attackDamage = 1;
+    this.attackDamage = 10; // 1에서 10으로 증가
     this.attackCooldown = 1000; // 1초
     this.lastAttackTime = 0;
     this.attackAnimationStarted = false;
@@ -287,9 +287,15 @@ export class BaseEnemy {
           healthBarHeight
         );
 
-        ctx.fillStyle = "#ffffff";
+        // 텍스트 외곽선 추가
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 3;
         ctx.font = "12px Arial";
         ctx.textAlign = "center";
+        ctx.strokeText(`${Math.ceil(this.chips)}칩`, this.x, healthBarY - 2);
+        
+        // 텍스트 색상을 검정색으로 변경
+        ctx.fillStyle = "#000000";
         ctx.fillText(`${Math.ceil(this.chips)}칩`, this.x, healthBarY - 2);
       }
     } else {

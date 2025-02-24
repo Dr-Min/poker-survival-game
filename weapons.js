@@ -4,52 +4,52 @@ import { POKER_HANDS } from "./pokerHands.js";
 export const WEAPONS = {
   [POKER_HANDS.HIGH_CARD]: {
     name: "리볼버",
-    damage: 1,
+    damage: 10,
     description: "기본 단발 공격",
   },
   [POKER_HANDS.ONE_PAIR]: {
     name: "듀얼 리볼버",
-    damage: 2,
+    damage: 20,
     description: "양손 권총으로 2발 발사",
   },
   [POKER_HANDS.TWO_PAIR]: {
     name: "더블 듀얼 리볼버",
-    damage: 3,
+    damage: 30,
     description: "양손 권총으로 4발 발사",
   },
   [POKER_HANDS.THREE_OF_A_KIND]: {
     name: "트리플 샷건",
-    damage: 4,
+    damage: 40,
     description: "3갈래 산탄 발사",
   },
   [POKER_HANDS.STRAIGHT]: {
     name: "레이저 레일건",
-    damage: 5,
+    damage: 50,
     description: "관통하는 레이저 발사",
   },
   [POKER_HANDS.FLUSH]: {
     name: "플라즈마 캐논",
-    damage: 7,
+    damage: 70,
     description: "강력한 플라즈마 구체 발사",
   },
   [POKER_HANDS.FULL_HOUSE]: {
     name: "샷건+권총 콤보",
-    damage: 6,
+    damage: 60,
     description: "산탄과 정확한 단발을 동시에 발사",
   },
   [POKER_HANDS.FOUR_OF_A_KIND]: {
     name: "4연발 로켓런처",
-    damage: 8,
+    damage: 80,
     description: "4발의 로켓 연속 발사",
   },
   [POKER_HANDS.STRAIGHT_FLUSH]: {
     name: "레이저 게이트링건",
-    damage: 9,
+    damage: 90,
     description: "고속 레이저 연속 발사",
   },
   [POKER_HANDS.ROYAL_STRAIGHT_FLUSH]: {
     name: "오비탈 레이저 스트라이크",
-    damage: 10,
+    damage: 100,
     description: "전방위 레이저 공격",
   },
 };

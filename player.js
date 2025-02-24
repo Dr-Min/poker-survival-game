@@ -7,15 +7,15 @@ export class Player {
     this.y = canvas.height / 2;
     this.size = 20;
     this.speed = 1.6;
-    this.chips = 10;
-    this.chipBag = 10;
+    this.chips = 100;
+    this.chipBag = 100;
     this.invincible = false;
     this.invincibleTime = 2000;
     this.isDashInvincible = false;
     this.bulletSpeed = 5.6;
     this.lastShot = 0;
     this.shotInterval = 600;
-    this.bulletDamage = 1;
+    this.bulletDamage = 10;
     this.lastHitTime = 0;
 
     // 대시 관련 속성 수정
@@ -75,6 +75,8 @@ export class Player {
     this.touchStartY = 0;
     this.touchEndX = 0;
     this.touchEndY = 0;
+
+    this.surplusChips = 0; // 잉여칩(점수) 추가
   }
 
   move(keys, mouseX, mouseY, joystick) {
@@ -430,13 +432,29 @@ export class Player {
   }
 
   heal(amount) {
-    this.chips = Math.min(this.chipBag, this.chips + amount);
+    const missingHealth = this.chipBag - this.chips; // 부족한 체력
+    
+    if (missingHealth > 0) {
+      if (amount <= missingHealth) {
+        // 획득한 칩이 부족한 체력보다 적거나 같으면 전부 체력 회복에 사용
+        this.chips += amount;
+      } else {
+        // 획득한 칩이 부족한 체력보다 많으면
+        this.chips = this.chipBag; // 체력을 최대치로
+        const surplus = amount - missingHealth; // 초과분 계산
+        this.surplusChips += surplus * 0.5; // 초과분의 50%를 잉여칩으로 저장
+      }
+    } else {
+      // 이미 체력이 가득 찬 경우
+      this.surplusChips += amount * 0.5; // 획득한 칩의 50%를 잉여칩으로 저장
+    }
+
     // 칩 획득 텍스트 표시
     if (window.game && window.game.ui) {
       window.game.ui.addDamageText(
         this.x,
         this.y,
-        Math.round(amount), // 문자열 포맷팅 제거하고 숫자만 전달
+        Math.round(amount),
         "#00ff00"
       );
     }

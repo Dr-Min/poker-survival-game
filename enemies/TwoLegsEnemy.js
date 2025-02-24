@@ -21,7 +21,7 @@ export class TwoLegsEnemy extends BaseEnemy {
     this.attackDuration = 80;
     this.attackTicksPerFrame = 5;
     this.damageFrame = 5;
-    this.attackDamage = 2;
+    this.attackDamage = 20;
   }
 
   draw(ctx) {
