@@ -171,15 +171,15 @@ export class Game {
     // 키 이벤트
     window.addEventListener("keydown", (e) => {
       // F5와 F12는 기본 동작 허용
-      if (e.key === 'F5' || e.key === 'F12') return;
-      
+      if (e.key === "F5" || e.key === "F12") return;
+
       e.preventDefault(); // 기본 동작 방지
       this.handleKeyDown(e);
     });
     window.addEventListener("keyup", (e) => {
       // F5와 F12는 기본 동작 허용
-      if (e.key === 'F5' || e.key === 'F12') return;
-      
+      if (e.key === "F5" || e.key === "F12") return;
+
       e.preventDefault(); // 기본 동작 방지
       this.handleKeyUp(e);
     });
@@ -466,7 +466,7 @@ export class Game {
 
     const dx = this.mouseX - this.player.x;
     const dy = this.mouseY - this.player.y;
-    
+
     // 마우스/터치 위치가 플레이어와 같은 위치일 경우 발사하지 않음
     if (dx === 0 && dy === 0) return;
 
@@ -530,10 +530,10 @@ export class Game {
     this.isPokerPhase = false;
     this.round = 1;
     this.score = 0;
-    
+
     // 전역 게임 객체 설정
     window.game = this;
-    
+
     // 게임 요소 초기화
     this.player = new Player(this.canvas);
     this.cardManager = new CardManager();
@@ -542,7 +542,7 @@ export class Game {
     this.effects = new Effects();
     this.ui = new UI(this.canvas);
     this.bulletManager.setUI(this.ui);
-    
+
     // 효과 시스템 초기화
     this.currentWeapon = this.effects.weaponSystem.getCurrentWeapon();
 
@@ -599,7 +599,7 @@ export class Game {
 
   update() {
     if (this.isGameOver) return;
-    
+
     if (this.isPokerPhase) {
       return;
     }
@@ -622,23 +622,23 @@ export class Game {
           ...attack,
           startTime: now,
           duration: attack.type === "slam" ? 1000 : 500, // 공격 타입별 지속시간
-          hasDealtDamage: false
+          hasDealtDamage: false,
         };
       }
 
       // 현재 진행 중인 공격 업데이트
       if (this.currentBossAttack) {
         const attackAge = now - this.currentBossAttack.startTime;
-        
+
         // 공격 판정 타이밍 (애니메이션 중간 시점)
         const damageTime = this.currentBossAttack.duration * 0.5;
-        
+
         // 데미지 판정 시점에 도달했고 아직 데미지를 주지 않았다면
         if (attackAge >= damageTime && !this.currentBossAttack.hasDealtDamage) {
           this.handleBossAttack(this.currentBossAttack);
           this.currentBossAttack.hasDealtDamage = true;
         }
-        
+
         // 공격 종료
         if (attackAge >= this.currentBossAttack.duration) {
           this.currentBossAttack = null;
@@ -655,8 +655,14 @@ export class Game {
         const angle = Math.atan2(dy, dx);
         this.boss.x = this.player.x + Math.cos(angle) * minDistance;
         this.boss.y = this.player.y + Math.sin(angle) * minDistance;
-        this.boss.x = Math.max(this.boss.size, Math.min(1200 - this.boss.size, this.boss.x));
-        this.boss.y = Math.max(this.boss.size, Math.min(800 - this.boss.size, this.boss.y));
+        this.boss.x = Math.max(
+          this.boss.size,
+          Math.min(1200 - this.boss.size, this.boss.x)
+        );
+        this.boss.y = Math.max(
+          this.boss.size,
+          Math.min(800 - this.boss.size, this.boss.y)
+        );
       }
 
       this.checkBossBattleResult();
@@ -693,6 +699,38 @@ export class Game {
       if (result.weaponChanged) {
         this.currentWeapon = result.currentWeapon;
       }
+
+      // 하트 효과 - 칩 주머니 크기 증가 (하트 2개 이상)
+      if (result.effects.heart && result.effects.heart.bagSizeIncrease > 0) {
+        // 원래 최대 체력에 비례하여 증가
+        const originalBag =
+          this.player.chipBag / (1 + result.effects.heart.bagSizeIncrease);
+        const newBag = originalBag * (1 + result.effects.heart.bagSizeIncrease);
+        // 체력 주머니 업데이트
+        this.player.chipBag = newBag;
+
+        // 현재 체력 비율 유지
+        const healthRatio = this.player.chips / originalBag;
+        this.player.chips = newBag * healthRatio;
+      }
+
+      // 하트 3개 달성 시 즉시 아군 소환
+      if (result.effects.heart && result.effects.heart.count >= 3) {
+        try {
+          const parsedPrevCards = JSON.parse(prevCards);
+          const prevHeartCount = parsedPrevCards.filter(
+            (card) => card.type === "heart"
+          ).length;
+
+          // 하트 수가 3개 미만에서 3개 이상으로 증가했을 때만 실행
+          if (prevHeartCount < 3 && result.effects.heart.count >= 3) {
+            // 아군 2명 즉시 소환
+            this.spawnAllies(2);
+          }
+        } catch (error) {
+          console.error("카드 정보 파싱 실패:", error);
+        }
+      }
     }
 
     this.bulletManager.updateBullets(
@@ -715,46 +753,56 @@ export class Game {
     if (this.currentBossAttack) {
       const attack = this.currentBossAttack;
       const ctx = this.ctx;
-      
+
       ctx.save();
-      
+
       // 공격 판정 영역 표시
       ctx.globalAlpha = 0.3;
-      ctx.fillStyle = '#ff0000';
-      
+      ctx.fillStyle = "#ff0000";
+
       switch (attack.type) {
         case "bomb":
         case "slam":
           ctx.beginPath();
           ctx.arc(attack.x, attack.y, attack.radius, 0, Math.PI * 2);
           ctx.fill();
-          
+
           // 테두리
           ctx.globalAlpha = 0.8;
-          ctx.strokeStyle = '#ff0000';
+          ctx.strokeStyle = "#ff0000";
           ctx.lineWidth = 2;
           ctx.stroke();
-          
+
           // 데미지 표시
           ctx.globalAlpha = 1;
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '14px Arial';
-          ctx.fillText(`데미지: ${attack.damage}`, attack.x - 30, attack.y - attack.radius - 10);
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "14px Arial";
+          ctx.fillText(
+            `데미지: ${attack.damage}`,
+            attack.x - 30,
+            attack.y - attack.radius - 10
+          );
           break;
-          
+
         case "single":
         case "area":
           ctx.beginPath();
-          ctx.arc(attack.x || this.canvas.width / 2, attack.y || 150, attack.range, 0, Math.PI * 2);
+          ctx.arc(
+            attack.x || this.canvas.width / 2,
+            attack.y || 150,
+            attack.range,
+            0,
+            Math.PI * 2
+          );
           ctx.fill();
-          
+
           ctx.globalAlpha = 0.8;
-          ctx.strokeStyle = '#ff0000';
+          ctx.strokeStyle = "#ff0000";
           ctx.lineWidth = 2;
           ctx.stroke();
           break;
       }
-      
+
       ctx.restore();
     }
 
@@ -771,7 +819,11 @@ export class Game {
 
     if (this.isPokerPhase) {
       this.ui.collectedCards = this.cardManager.getCollectedCards();
-      this.ui.drawPokerUI(this.pokerState, this.pokerSystem, this.selectedCards);
+      this.ui.drawPokerUI(
+        this.pokerState,
+        this.pokerSystem,
+        this.selectedCards
+      );
       return;
     }
 
@@ -820,7 +872,7 @@ export class Game {
         score: this.score,
         round: this.round,
         cards: this.cardManager.getCollectedCards(),
-        player: this.player
+        player: this.player,
       });
     }
   }
@@ -828,13 +880,13 @@ export class Game {
   stopGame() {
     this.isGameOver = true;
     // gameLoop는 계속 실행되도록 cancelAnimationFrame 제거
-    
+
     // 게임오버 화면 표시
     this.ui.drawGameOverScreen({
       score: this.score,
       round: this.round,
       cards: this.cardManager.getCollectedCards(),
-      player: this.player
+      player: this.player,
     });
   }
 
@@ -1037,20 +1089,21 @@ export class Game {
         this.pokerState.phase = "showdown";
         // 쇼다운 시작 시간 설정 및 게임 결과 저장
         const gameResult = this.pokerSystem.saveGameResult();
-        
+
         // 결과에 따른 데미지 처리
         const totalBetPercent = 60 + this.pokerState.currentBetPercent;
-        
+
         if (gameResult.winner === "player") {
           // 보스는 총 배팅의 2/3만큼 데미지
-          const bossDamage = this.boss.chipBag * (((totalBetPercent / 100) * 2) / 3);
+          const bossDamage =
+            this.boss.chipBag * (((totalBetPercent / 100) * 2) / 3);
           this.boss.takeDamage(bossDamage);
-          console.log('보스 데미지:', bossDamage);
+          console.log("보스 데미지:", bossDamage);
         } else {
           // 플레이어는 총 배팅만큼 데미지
           const playerDamage = this.player.chipBag * (totalBetPercent / 100);
           this.player.chips = Math.max(1, this.player.chips - playerDamage);
-          console.log('플레이어 데미지:', playerDamage);
+          console.log("플레이어 데미지:", playerDamage);
         }
         break;
     }
@@ -1066,31 +1119,37 @@ export class Game {
     switch (attack.type) {
       case "single":
         // 단일 강공격 판정 영역 표시
-        const ctx = this.canvas.getContext('2d');
+        const ctx = this.canvas.getContext("2d");
         ctx.save();
         ctx.globalAlpha = 0.2;
-        ctx.fillStyle = '#ff0000';
+        ctx.fillStyle = "#ff0000";
         ctx.beginPath();
         ctx.arc(this.canvas.width / 2, 150, attack.range, 0, Math.PI * 2);
         ctx.fill();
-        
+
         // 테두리 표시
         ctx.globalAlpha = 0.8;
-        ctx.strokeStyle = '#ff0000';
+        ctx.strokeStyle = "#ff0000";
         ctx.lineWidth = 2;
         ctx.stroke();
-        
+
         // 데미지 표시
         ctx.globalAlpha = 1;
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '14px Arial';
-        ctx.fillText(`데미지: ${attack.damage}`, this.canvas.width / 2 - 30, 120);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "14px Arial";
+        ctx.fillText(
+          `데미지: ${attack.damage}`,
+          this.canvas.width / 2 - 30,
+          120
+        );
         ctx.restore();
 
         // 데미지 판정
         const singleDx = this.player.x - this.canvas.width / 2;
         const singleDy = this.player.y - 150;
-        const singleDistance = Math.sqrt(singleDx * singleDx + singleDy * singleDy);
+        const singleDistance = Math.sqrt(
+          singleDx * singleDx + singleDy * singleDy
+        );
         if (singleDistance <= attack.range) {
           this.player.takeDamage(attack.damage);
           this.ui.addDamageText(
@@ -1104,25 +1163,29 @@ export class Game {
 
       case "area":
         // 광역 약공격 판정 영역 표시
-        const areaCtx = this.canvas.getContext('2d');
+        const areaCtx = this.canvas.getContext("2d");
         areaCtx.save();
         areaCtx.globalAlpha = 0.2;
-        areaCtx.fillStyle = '#ff0000';
+        areaCtx.fillStyle = "#ff0000";
         areaCtx.beginPath();
         areaCtx.arc(this.canvas.width / 2, 150, attack.range, 0, Math.PI * 2);
         areaCtx.fill();
-        
+
         // 테두리 표시
         areaCtx.globalAlpha = 0.8;
-        areaCtx.strokeStyle = '#ff0000';
+        areaCtx.strokeStyle = "#ff0000";
         areaCtx.lineWidth = 2;
         areaCtx.stroke();
-        
+
         // 데미지 표시
         areaCtx.globalAlpha = 1;
-        areaCtx.fillStyle = '#ffffff';
-        areaCtx.font = '14px Arial';
-        areaCtx.fillText(`데미지: ${attack.damage}`, this.canvas.width / 2 - 30, 120);
+        areaCtx.fillStyle = "#ffffff";
+        areaCtx.font = "14px Arial";
+        areaCtx.fillText(
+          `데미지: ${attack.damage}`,
+          this.canvas.width / 2 - 30,
+          120
+        );
         areaCtx.restore();
 
         // 데미지 판정
@@ -1142,165 +1205,218 @@ export class Game {
 
       case "multi":
         // 연속 공격 판정 영역 표시
-        const multiCtx = this.canvas.getContext('2d');
+        const multiCtx = this.canvas.getContext("2d");
         multiCtx.save();
         multiCtx.globalAlpha = 0.2;
-        multiCtx.fillStyle = '#ff0000';
+        multiCtx.fillStyle = "#ff0000";
         multiCtx.beginPath();
         multiCtx.arc(this.canvas.width / 2, 150, 100, 0, Math.PI * 2);
         multiCtx.fill();
-        
+
         // 테두리 표시
         multiCtx.globalAlpha = 0.8;
-        multiCtx.strokeStyle = '#ff0000';
+        multiCtx.strokeStyle = "#ff0000";
         multiCtx.lineWidth = 2;
         multiCtx.stroke();
-        
+
         // 데미지 표시
         multiCtx.globalAlpha = 1;
-        multiCtx.fillStyle = '#ffffff';
-        multiCtx.font = '14px Arial';
-        multiCtx.fillText(`데미지: ${attack.damage} x ${attack.count}`, this.canvas.width / 2 - 40, 120);
+        multiCtx.fillStyle = "#ffffff";
+        multiCtx.font = "14px Arial";
+        multiCtx.fillText(
+          `데미지: ${attack.damage} x ${attack.count}`,
+          this.canvas.width / 2 - 40,
+          120
+        );
         multiCtx.restore();
         break;
 
       case "cross":
         // 십자 레이저 판정 영역 표시
-        const crossCtx = this.canvas.getContext('2d');
+        const crossCtx = this.canvas.getContext("2d");
         crossCtx.save();
         crossCtx.globalAlpha = 0.2;
-        crossCtx.fillStyle = '#ff0000';
-        
+        crossCtx.fillStyle = "#ff0000";
+
         // 가로 레이저
-        crossCtx.fillRect(0, this.boss.y - attack.width / 2, this.canvas.width, attack.width);
+        crossCtx.fillRect(
+          0,
+          this.boss.y - attack.width / 2,
+          this.canvas.width,
+          attack.width
+        );
         // 세로 레이저
-        crossCtx.fillRect(this.boss.x - attack.width / 2, 0, attack.width, this.canvas.height);
-        
+        crossCtx.fillRect(
+          this.boss.x - attack.width / 2,
+          0,
+          attack.width,
+          this.canvas.height
+        );
+
         // 테두리 표시
         crossCtx.globalAlpha = 0.8;
-        crossCtx.strokeStyle = '#ff0000';
+        crossCtx.strokeStyle = "#ff0000";
         crossCtx.lineWidth = 2;
-        crossCtx.strokeRect(0, this.boss.y - attack.width / 2, this.canvas.width, attack.width);
-        crossCtx.strokeRect(this.boss.x - attack.width / 2, 0, attack.width, this.canvas.height);
-        
+        crossCtx.strokeRect(
+          0,
+          this.boss.y - attack.width / 2,
+          this.canvas.width,
+          attack.width
+        );
+        crossCtx.strokeRect(
+          this.boss.x - attack.width / 2,
+          0,
+          attack.width,
+          this.canvas.height
+        );
+
         // 데미지 표시
         crossCtx.globalAlpha = 1;
-        crossCtx.fillStyle = '#ffffff';
-        crossCtx.font = '14px Arial';
-        crossCtx.fillText(`데미지: ${attack.damage}/초`, this.boss.x + 20, this.boss.y - 20);
+        crossCtx.fillStyle = "#ffffff";
+        crossCtx.font = "14px Arial";
+        crossCtx.fillText(
+          `데미지: ${attack.damage}/초`,
+          this.boss.x + 20,
+          this.boss.y - 20
+        );
         crossCtx.restore();
         break;
 
       case "circular":
         // 원형 탄막 판정 영역 표시
-        const circularCtx = this.canvas.getContext('2d');
+        const circularCtx = this.canvas.getContext("2d");
         circularCtx.save();
-        
+
         // 탄막 패턴 표시
         for (let i = 0; i < attack.bulletCount; i++) {
           const angle = (i * Math.PI * 2) / attack.bulletCount;
           const x = this.boss.x + Math.cos(angle) * 50;
           const y = this.boss.y + Math.sin(angle) * 50;
-          
+
           circularCtx.globalAlpha = 0.2;
-          circularCtx.fillStyle = '#ff0000';
+          circularCtx.fillStyle = "#ff0000";
           circularCtx.beginPath();
           circularCtx.arc(x, y, 8, 0, Math.PI * 2);
           circularCtx.fill();
-          
+
           // 탄막 방향 표시
           circularCtx.globalAlpha = 0.8;
-          circularCtx.strokeStyle = '#ff0000';
+          circularCtx.strokeStyle = "#ff0000";
           circularCtx.beginPath();
           circularCtx.moveTo(this.boss.x, this.boss.y);
-          circularCtx.lineTo(x + Math.cos(angle) * 30, y + Math.sin(angle) * 30);
+          circularCtx.lineTo(
+            x + Math.cos(angle) * 30,
+            y + Math.sin(angle) * 30
+          );
           circularCtx.stroke();
         }
-        
+
         // 데미지 표시
         circularCtx.globalAlpha = 1;
-        circularCtx.fillStyle = '#ffffff';
-        circularCtx.font = '14px Arial';
-        circularCtx.fillText(`데미지: ${attack.damage}/발`, this.boss.x + 20, this.boss.y - 20);
+        circularCtx.fillStyle = "#ffffff";
+        circularCtx.font = "14px Arial";
+        circularCtx.fillText(
+          `데미지: ${attack.damage}/발`,
+          this.boss.x + 20,
+          this.boss.y - 20
+        );
         circularCtx.restore();
         break;
 
       case "bomb":
         // 폭탄 공격 판정 영역 표시
-        const bombCtx = this.canvas.getContext('2d');
+        const bombCtx = this.canvas.getContext("2d");
         bombCtx.save();
-        
+
         // 폭발 범위 표시
         bombCtx.globalAlpha = 0.2;
-        bombCtx.fillStyle = '#ff0000';
+        bombCtx.fillStyle = "#ff0000";
         bombCtx.beginPath();
         bombCtx.arc(attack.x, attack.y, attack.radius, 0, Math.PI * 2);
         bombCtx.fill();
-        
+
         // 테두리 표시
         bombCtx.globalAlpha = 0.8;
-        bombCtx.strokeStyle = '#ff0000';
+        bombCtx.strokeStyle = "#ff0000";
         bombCtx.lineWidth = 2;
         bombCtx.stroke();
-        
+
         // 데미지 표시
         bombCtx.globalAlpha = 1;
-        bombCtx.fillStyle = '#ffffff';
-        bombCtx.font = '14px Arial';
-        bombCtx.fillText(`폭발 데미지: ${attack.damage}`, attack.x - 40, attack.y - attack.radius - 10);
-        
+        bombCtx.fillStyle = "#ffffff";
+        bombCtx.font = "14px Arial";
+        bombCtx.fillText(
+          `폭발 데미지: ${attack.damage}`,
+          attack.x - 40,
+          attack.y - attack.radius - 10
+        );
+
         bombCtx.restore();
         break;
 
       case "slam":
         // 슬램 공격 판정 영역 표시
-        const slamCtx = this.canvas.getContext('2d');
+        const slamCtx = this.canvas.getContext("2d");
         slamCtx.save();
-        
+
         // 충격파 범위 표시
         slamCtx.globalAlpha = 0.2;
-        slamCtx.fillStyle = '#ff0000';
+        slamCtx.fillStyle = "#ff0000";
         slamCtx.beginPath();
         slamCtx.arc(attack.x, attack.y, attack.radius, 0, Math.PI * 2);
         slamCtx.fill();
-        
+
         // 테두리와 거리별 데미지 구간 표시
         const radiusSteps = [0.33, 0.66, 1];
         radiusSteps.forEach((step, index) => {
           slamCtx.globalAlpha = 0.8;
-          slamCtx.strokeStyle = '#ff0000';
+          slamCtx.strokeStyle = "#ff0000";
           slamCtx.lineWidth = 2;
           slamCtx.beginPath();
           slamCtx.arc(attack.x, attack.y, attack.radius * step, 0, Math.PI * 2);
           slamCtx.stroke();
-          
+
           // 구간별 데미지 표시
           const damageAtRadius = Math.round(attack.damage * (1 - step));
           slamCtx.globalAlpha = 1;
-          slamCtx.fillStyle = '#ffffff';
-          slamCtx.font = '12px Arial';
-          slamCtx.fillText(`${damageAtRadius}`, attack.x + 10, attack.y - (attack.radius * step));
+          slamCtx.fillStyle = "#ffffff";
+          slamCtx.font = "12px Arial";
+          slamCtx.fillText(
+            `${damageAtRadius}`,
+            attack.x + 10,
+            attack.y - attack.radius * step
+          );
         });
-        
+
         // 최대 데미지 표시
         slamCtx.globalAlpha = 1;
-        slamCtx.fillStyle = '#ffffff';
-        slamCtx.font = '14px Arial';
-        slamCtx.fillText(`최대 데미지: ${attack.damage}`, attack.x - 50, attack.y - attack.radius - 10);
-        
+        slamCtx.fillStyle = "#ffffff";
+        slamCtx.font = "14px Arial";
+        slamCtx.fillText(
+          `최대 데미지: ${attack.damage}`,
+          attack.x - 50,
+          attack.y - attack.radius - 10
+        );
+
         slamCtx.restore();
-        
+
         // 실제 데미지 판정
         const slamDx = this.player.x - attack.x;
         const slamDy = this.player.y - attack.y;
         const slamDistance = Math.sqrt(slamDx * slamDx + slamDy * slamDy);
 
         if (slamDistance <= attack.radius) {
-          const damageRatio = 1 - (slamDistance / attack.radius);
+          const damageRatio = 1 - slamDistance / attack.radius;
           const finalDamage = attack.damage * damageRatio;
-          
-          console.log(`슬램 공격 데미지 판정: 거리=${slamDistance.toFixed(2)}, 반경=${attack.radius}, 데미지 비율=${damageRatio.toFixed(2)}, 최종 데미지=${finalDamage.toFixed(0)}`);
-          
+
+          console.log(
+            `슬램 공격 데미지 판정: 거리=${slamDistance.toFixed(2)}, 반경=${
+              attack.radius
+            }, 데미지 비율=${damageRatio.toFixed(
+              2
+            )}, 최종 데미지=${finalDamage.toFixed(0)}`
+          );
+
           this.player.takeDamage(finalDamage);
           if (this.ui) {
             this.ui.addDamageText(
@@ -1420,6 +1536,33 @@ export class Game {
 
     // 플레이어에게 대시 명령 전달
     this.player.dash(x, y);
+  }
+
+  // 아군 소환 메서드 추가
+  spawnAllies(count) {
+    if (!this.enemyManager) return;
+
+    console.log(`${count}명의 아군 즉시 소환 시도`);
+
+    for (let i = 0; i < count; i++) {
+      // 랜덤 위치에 아군 소환
+      const x = this.player.x + (Math.random() * 100 - 50);
+      const y = this.player.y + (Math.random() * 100 - 50);
+
+      // 랜덤 타입의 적으로 아군 생성
+      const enemyTypes = ["TwoLegsEnemy", "FourLegsEnemy"];
+      const randomType =
+        enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+
+      const ally = this.enemyManager.createEnemy(x, y, randomType);
+
+      if (ally) {
+        ally.isAlly = true;
+        ally.chips = 30; // 아군 체력 30으로 설정
+        ally.maxChips = 30;
+        console.log("아군 소환됨:", ally);
+      }
+    }
   }
 }
 

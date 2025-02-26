@@ -21,6 +21,7 @@ export class Player {
     // 대시 관련 속성 수정
     this.dashSpeed = 6; // 대시 속도 절반으로 감소
     this.dashDuration = 200; // 대시 지속시간 (ms) - 200ms에서 400ms로 증가
+    this.dashInvincibleDuration = 1000; // 대시 무적 지속시간 (1초)
     this.dashCooldown = 500; // 개별 대시 쿨다운 (0.5초)
     this.dashRechargeTime = 5000; // 대시 충전 시간 (5초)
     this.isDashing = false;
@@ -194,12 +195,12 @@ export class Player {
     const dashTargetX = this.isTouching ? this.touchEndX : targetX;
     const dashTargetY = this.isTouching ? this.touchEndY : targetY;
 
-    console.log('대시 시작');
+    console.log("대시 시작");
     this.isDashing = true;
     this.canDash = false;
     this.lastDashTime = Date.now();
     this.isDashInvincible = true;
-    console.log('무적 판정 시작 - 대시');
+    console.log("무적 판정 시작 - 대시");
 
     // 대시 사용
     this.currentCharge = Math.max(0, this.currentCharge - 1);
@@ -214,11 +215,15 @@ export class Player {
 
     // 대시 종료
     setTimeout(() => {
-      console.log('대시 종료');
+      console.log("대시 종료");
       this.isDashing = false;
-      this.isDashInvincible = false;
-      console.log('무적 판정 종료 - 대시');
     }, this.dashDuration);
+
+    // 대시 무적 종료 (1초 후)
+    setTimeout(() => {
+      this.isDashInvincible = false;
+      console.log("무적 판정 종료 - 대시");
+    }, this.dashInvincibleDuration);
 
     // 개별 대시 쿨다운
     setTimeout(() => {
@@ -237,12 +242,12 @@ export class Player {
   startDash(keys) {
     if (!this.canDash || this.isDashing || this.dashCharges <= 0) return;
 
-    console.log('대시 시작');
+    console.log("대시 시작");
     this.isDashing = true;
     this.canDash = false;
     this.lastDashTime = Date.now();
     this.isDashInvincible = true;
-    console.log('무적 판정 시작 - 대시');
+    console.log("무적 판정 시작 - 대시");
 
     // 대시 사용
     this.currentCharge = Math.max(0, this.currentCharge - 1);
@@ -277,11 +282,15 @@ export class Player {
 
     // 대시 종료
     setTimeout(() => {
-      console.log('대시 종료');
+      console.log("대시 종료");
       this.isDashing = false;
-      this.isDashInvincible = false;
-      console.log('무적 판정 종료 - 대시');
     }, this.dashDuration);
+
+    // 대시 무적 종료 (1초 후)
+    setTimeout(() => {
+      this.isDashInvincible = false;
+      console.log("무적 판정 종료 - 대시");
+    }, this.dashInvincibleDuration);
 
     // 개별 대시 쿨다운
     setTimeout(() => {
@@ -301,12 +310,19 @@ export class Player {
     this.lastMouseX = this.mouseX;
     this.lastMouseY = this.mouseY;
 
-    if (!this.invincible || !this.isDashInvincible || Math.floor(Date.now() / 100) % 2) {
+    if (
+      !this.invincible ||
+      !this.isDashInvincible ||
+      Math.floor(Date.now() / 100) % 2
+    ) {
       ctx.save();
       ctx.translate(this.x, this.y);
 
       // 히트박스 항상 표시
-      ctx.strokeStyle = (this.invincible || this.isDashInvincible) ? "rgba(0, 255, 0, 0.5)" : "rgba(255, 0, 0, 0.5)";
+      ctx.strokeStyle =
+        this.invincible || this.isDashInvincible
+          ? "rgba(0, 255, 0, 0.5)"
+          : "rgba(255, 0, 0, 0.5)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(0, 0, this.size / 2, 0, Math.PI * 2);
@@ -439,7 +455,7 @@ export class Player {
 
   heal(amount) {
     const missingHealth = this.chipBag - this.chips; // 부족한 체력
-    
+
     if (missingHealth > 0) {
       if (amount <= missingHealth) {
         // 획득한 칩이 부족한 체력보다 적거나 같으면 전부 체력 회복에 사용
@@ -485,7 +501,7 @@ export class Player {
     const dx = this.x - x;
     const dy = this.y - y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < (this.size / 2 + radius);
+    return distance < this.size / 2 + radius;
   }
 
   // 직사각형 충돌 체크 메서드 추가
@@ -495,8 +511,8 @@ export class Player {
     const playerHalfSize = this.size / 2;
 
     return (
-      Math.abs(this.x - x) < (halfWidth + playerHalfSize) &&
-      Math.abs(this.y - y) < (halfHeight + playerHalfSize)
+      Math.abs(this.x - x) < halfWidth + playerHalfSize &&
+      Math.abs(this.y - y) < halfHeight + playerHalfSize
     );
   }
 
@@ -505,7 +521,7 @@ export class Player {
     return {
       x: this.x,
       y: this.y,
-      radius: this.size / 2
+      radius: this.size / 2,
     };
   }
 

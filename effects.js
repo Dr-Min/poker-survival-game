@@ -19,9 +19,10 @@ export class Effects {
       },
       heart: {
         count: 0,
-        lifeSteal: 0,
-        convertChance: 0,
-        maxHpIncrease: 0,
+        chipDropMultiplier: 1,
+        bagSizeIncrease: 0,
+        allySpawnChance: 0,
+        maxAllies: 0,
         allyPowerUp: false,
         ultimateEndTime: 0,
       },
@@ -73,19 +74,21 @@ export class Effects {
 
     // 하트 효과 적용
     if (cardCounts.heart >= 1) {
-      this.effects.heart.lifeSteal = 0.1;
+      this.effects.heart.chipDropMultiplier = 2;
     }
     if (cardCounts.heart >= 2) {
-      this.effects.heart.convertChance = 0.25;
+      this.effects.heart.bagSizeIncrease = 0.2;
     }
     if (cardCounts.heart >= 3) {
-      this.effects.heart.maxHpIncrease = 0.3;
+      this.effects.heart.allySpawnChance = 0.1;
+      this.effects.heart.maxAllies = 2;
     }
     if (cardCounts.heart >= 4) {
       this.effects.heart.allyPowerUp = true;
+      this.effects.heart.maxAllies = 4;
     }
     if (cardCounts.heart >= 5) {
-      this.effects.heart.ultimateEndTime = Date.now() + 10000;
+      this.effects.heart.chipDropMultiplier = 5;
     }
 
     // 다이아몬드 효과 적용

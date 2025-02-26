@@ -194,10 +194,16 @@ export class UI {
 
     // 칩 카운터 배경
     this.ctx.fillStyle = "#444444";
-    this.ctx.fillRect(chipCounterX, chipCounterY, chipCounterWidth, chipCounterHeight);
+    this.ctx.fillRect(
+      chipCounterX,
+      chipCounterY,
+      chipCounterWidth,
+      chipCounterHeight
+    );
 
     // 현재 칩 수량
-    const currentChipsWidth = (player.chips / player.chipBag) * chipCounterWidth;
+    const currentChipsWidth =
+      (player.chips / player.chipBag) * chipCounterWidth;
     this.ctx.fillStyle = "#ffff00";
     this.ctx.fillRect(
       chipCounterX,
@@ -237,19 +243,23 @@ export class UI {
 
   drawBossHealthBar(boss) {
     // 보스 객체 유효성 검사
-    if (!boss || typeof boss.chips === 'undefined' || typeof boss.chipBag === 'undefined') {
-      console.log('보스 체력바 그리기 실패:', {
-        boss: boss ? '존재' : '없음',
+    if (
+      !boss ||
+      typeof boss.chips === "undefined" ||
+      typeof boss.chipBag === "undefined"
+    ) {
+      console.log("보스 체력바 그리기 실패:", {
+        boss: boss ? "존재" : "없음",
         chips: boss?.chips,
-        chipBag: boss?.chipBag
+        chipBag: boss?.chipBag,
       });
       return;
     }
 
-    console.log('보스 체력 정보:', {
+    console.log("보스 체력 정보:", {
       현재체력: boss.chips,
       최대체력: boss.chipBag,
-      비율: boss.chips / boss.chipBag
+      비율: boss.chips / boss.chipBag,
     });
 
     const bossChipCounterWidth = 600;
@@ -268,8 +278,9 @@ export class UI {
 
     // 현재 보스 칩 수량 (백분율로 계산)
     const healthPercentage = boss.chips / boss.chipBag;
-    const currentBossChipsWidth = Math.max(0, Math.min(1, healthPercentage)) * bossChipCounterWidth;
-    
+    const currentBossChipsWidth =
+      Math.max(0, Math.min(1, healthPercentage)) * bossChipCounterWidth;
+
     // 체력바 색상
     this.ctx.fillStyle = "#ffff00";
     this.ctx.fillRect(
@@ -357,14 +368,17 @@ export class UI {
           case "criticalChance":
             text = `- 치명타 확률 ${value * 100}%`;
             break;
-          case "lifeSteal":
-            text = `- 흡혈량 ${value * 100}%`;
+          case "chipDropMultiplier":
+            text = `- 칩 드랍율 ${value}배 증가`;
             break;
-          case "convertChance":
-            text = `- 적 전환 확률 ${value * 100}%`;
+          case "bagSizeIncrease":
+            text = `- 칩 주머니 크기 ${value * 100}% 증가`;
             break;
-          case "maxHpIncrease":
-            text = `- 최대 체력 ${value * 100}% 증가`;
+          case "allySpawnChance":
+            text = `- 적 처치 시 ${value * 100}% 확률로 아군 소환`;
+            break;
+          case "maxAllies":
+            text = `- 최대 아군 수 ${value}명`;
             break;
           case "allyPowerUp":
             text = `- 아군 강화`;
@@ -405,7 +419,7 @@ export class UI {
   addDamageText(x, y, damage, color = "#ffffff") {
     // 데미지 값을 정수로 반올림
     const roundedDamage = Math.round(damage);
-    
+
     this.damageTexts.push({
       x: x,
       y: y - 30, // 캐릭터 위에 표시되도록 Y 좌표 조정
@@ -413,21 +427,21 @@ export class UI {
       color: color,
       alpha: 1.0,
       offsetY: 0,
-      createdAt: Date.now()
+      createdAt: Date.now(),
     });
   }
 
   updateDamageTexts() {
     const now = Date.now();
-    
+
     // 기존 데미지 텍스트 배열 업데이트
-    this.damageTexts = this.damageTexts.filter(text => {
+    this.damageTexts = this.damageTexts.filter((text) => {
       const age = now - text.createdAt;
       if (age > 1000) return false; // 1초 후 제거
 
       // 텍스트 위치와 투명도 업데이트
       text.offsetY -= 0.5; // 천천히 위로 올라가도록 속도 조정
-      text.alpha = 1 - (age / 1000); // 점점 투명해지는 효과
+      text.alpha = 1 - age / 1000; // 점점 투명해지는 효과
 
       // 텍스트 렌더링
       this.ctx.save();
@@ -697,20 +711,28 @@ export class UI {
   drawRoundTransition(round) {
     // 화면 중앙 상단에 라운드 클리어 메시지 표시
     this.ctx.save();
-    
+
     // 텍스트 스타일 설정
     this.ctx.font = "bold 48px Arial";
     this.ctx.textAlign = "center";
     this.ctx.textBaseline = "middle";
-    
+
     // 텍스트 그림자 효과
     this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-    this.ctx.fillText(`Round ${round} Clear`, this.canvas.width / 2 + 2, this.canvas.height / 3 + 2);
-    
+    this.ctx.fillText(
+      `Round ${round} Clear`,
+      this.canvas.width / 2 + 2,
+      this.canvas.height / 3 + 2
+    );
+
     // 메인 텍스트
     this.ctx.fillStyle = "#FFD700"; // 골드 색상
-    this.ctx.fillText(`Round ${round} Clear`, this.canvas.width / 2, this.canvas.height / 3);
-    
+    this.ctx.fillText(
+      `Round ${round} Clear`,
+      this.canvas.width / 2,
+      this.canvas.height / 3
+    );
+
     this.ctx.restore();
   }
 
@@ -1504,7 +1526,9 @@ export class UI {
       this.ctx.fillStyle = "#ffffff";
       this.ctx.font = "32px Arial";
       this.ctx.fillText(
-        `최종 칩: ${Math.floor(gameState.player.chips)} / ${gameState.player.chipBag}`,
+        `최종 칩: ${Math.floor(gameState.player.chips)} / ${
+          gameState.player.chipBag
+        }`,
         this.canvas.width / 2,
         this.canvas.height / 2 - 80
       );
