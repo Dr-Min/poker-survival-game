@@ -227,7 +227,7 @@ export class Game {
           cardInfo.number
         );
         this.cardManager.collectCard(card.type, card.number);
-        const result = this.effects.applyCardEffects(
+        const result = this.applyCardEffects(
           this.cardManager.getCollectedCards()
         );
         if (result.weaponChanged) {
@@ -1017,7 +1017,7 @@ export class Game {
           }
         );
 
-        const result = this.effects.applyCardEffects(
+        const result = this.applyCardEffects(
           this.cardManager.getCollectedCards()
         );
         if (result.weaponChanged) {
@@ -1056,7 +1056,7 @@ export class Game {
       }
 
       // 카드 효과 재계산
-      const result = this.effects.applyCardEffects(
+      const result = this.applyCardEffects(
         this.cardManager.getCollectedCards()
       );
       if (result.weaponChanged) {
@@ -1498,7 +1498,7 @@ export class Game {
     });
 
     // 효과 재계산
-    const result = this.effects.applyCardEffects(
+    const result = this.applyCardEffects(
       this.cardManager.getCollectedCards()
     );
     if (result.weaponChanged) {
