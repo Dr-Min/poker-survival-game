@@ -4,7 +4,7 @@ export class Boss {
     this.round = Math.max(1, round || 1);
     
     // 체력 관련 속성 초기화
-    this.chipBag = Math.max(15000, (1500 + ((this.round - 1) * 750)));
+    this.chipBag = Math.max(8000, (1500 + ((this.round - 1) * 750)));
     this.chips = this.chipBag;
     this.damage = (20 + Math.floor(this.round * 8));
     

@@ -608,7 +608,8 @@ export class BulletManager {
     // 일반 적과의 충돌 체크 (보스전이 아닐 때만)
     if (!this.game || !this.game.isBossBattle) {
       enemies.forEach((enemy) => {
-        if (!enemy.isDead && !bullet.hitEnemies.includes(enemy.id)) {
+        // 아군은 플레이어의 총알에 맞지 않도록 조건 추가
+        if (!enemy.isDead && !enemy.isAlly && !bullet.hitEnemies.includes(enemy.id)) {
           const dx = bullet.x - enemy.x;
           const dy = bullet.y - enemy.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
@@ -646,6 +647,26 @@ export class BulletManager {
   }
 
   applyDamage(bullet, enemy, damage, effects, enemies) {
+    // 아군 변환 처리 (적이 플레이어 총알에 맞았을 때)
+    if (!enemy.isAlly) {
+      // 하트 카드 3개 이상일 때만 아군 변환 기능 활성화
+      if (effects.heart.allyConversionEnabled) {
+        // 5% 확률로 적을 아군으로 변환
+        if (Math.random() < 0.05) {
+          console.log("적을 아군으로 변환 시도:", enemy.id);
+          enemy.isAlly = true;
+          
+          // 체력을 원래 체력의 절반으로 설정
+          enemy.chips = Math.ceil(enemy.maxChips / 2);
+          
+          console.log(`적이 아군으로 변환됨: ${enemy.id}, 체력: ${enemy.chips}/${enemy.maxChips}`);
+          
+          // 아군 변환 성공 시 추가 데미지 적용하지 않음
+          return;
+        }
+      }
+    }
+
     // 다이아몬드 효과 적용
     if (effects.diamond.count >= 1) enemy.speed *= 0.7;
     if (effects.diamond.count >= 2) enemy.stunEndTime = Date.now() + 1000;

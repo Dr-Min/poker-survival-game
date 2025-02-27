@@ -13,6 +13,13 @@ export function checkCollision(obj1, obj2) {
   return distance < (obj1.size + obj2.size) / 2;
 }
 
+// 랜덤 정수 생성 함수 (min 이상, max 이하)
+export function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 // 카드 색상 가져오기
 export function getCardColor(type) {
   switch (type) {

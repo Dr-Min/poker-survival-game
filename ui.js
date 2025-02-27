@@ -227,7 +227,7 @@ export class UI {
     this.ctx.font = "14px Arial";
     this.ctx.textAlign = "center";
     this.ctx.strokeText(
-      `${Math.ceil(player.chips)} / ${player.chipBag} 칩`,
+      `${Math.floor(player.chips)} / ${Math.floor(player.chipBag)} 칩`,
       chipCounterX + chipCounterWidth / 2,
       chipCounterY + chipCounterHeight / 2 + 5
     );
@@ -235,7 +235,7 @@ export class UI {
     // 칩 수량 텍스트
     this.ctx.fillStyle = "#000000";
     this.ctx.fillText(
-      `${Math.ceil(player.chips)} / ${player.chipBag} 칩`,
+      `${Math.floor(player.chips)} / ${Math.floor(player.chipBag)} 칩`,
       chipCounterX + chipCounterWidth / 2,
       chipCounterY + chipCounterHeight / 2 + 5
     );

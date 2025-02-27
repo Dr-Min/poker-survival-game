@@ -7,6 +7,31 @@ export class EnemyManager {
     this.enemies = [];
     this.cardManager = cardManager;
     this.game = game;
+    console.log("EnemyManager 초기화 완료");
+  }
+
+  // 새로 추가된 메소드: 지정된 타입의 적을 생성합니다
+  createEnemy(x, y, enemyType) {
+    let newEnemy;
+    
+    // 적 타입에 따라 적절한 객체 생성
+    switch (enemyType) {
+      case 'TwoLegsEnemy':
+        newEnemy = new TwoLegsEnemy(x, y, this.game.round || 1);
+        break;
+      case 'FourLegsEnemy':
+        newEnemy = new FourLegsEnemy(x, y, this.game.round || 1);
+        break;
+      default:
+        console.error(`알 수 없는 적 타입: ${enemyType}`);
+        return null;
+    }
+    
+    // 생성된 적을 적 목록에 추가
+    this.enemies.push(newEnemy);
+    console.log(`새로운 ${enemyType} 생성됨 (위치: ${x}, ${y})`);
+    
+    return newEnemy;
   }
 
   spawnEnemy(canvas, round, isRoundTransition) {
@@ -142,8 +167,16 @@ export class EnemyManager {
     return killedCount;
   }
 
-  clearEnemies() {
-    this.enemies = [];
+  clearEnemies(keepAllies = false) {
+    if (keepAllies) {
+      // 아군만 남기고 나머지 적들 제거
+      this.enemies = this.enemies.filter(enemy => enemy.isAlly && !enemy.isDead);
+      console.log(`아군 ${this.enemies.length}명 유지, 나머지 적 제거됨`);
+    } else {
+      // 모든 적 제거
+      this.enemies = [];
+      console.log("모든 적 제거됨");
+    }
   }
 
   drawEnemies(ctx) {

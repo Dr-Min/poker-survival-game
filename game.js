@@ -702,16 +702,19 @@ export class Game {
 
       // 하트 효과 - 칩 주머니 크기 증가 (하트 2개 이상)
       if (result.effects.heart && result.effects.heart.bagSizeIncrease > 0) {
-        // 원래 최대 체력에 비례하여 증가
-        const originalBag =
-          this.player.chipBag / (1 + result.effects.heart.bagSizeIncrease);
-        const newBag = originalBag * (1 + result.effects.heart.bagSizeIncrease);
+        // 기본 체력 설정 (초기값은 100)
+        const baseHealth = 100;
+        // 증가된 체력 계산 (기본 체력 + 증가율)
+        const newMaxHealth = baseHealth * (1 + result.effects.heart.bagSizeIncrease);
+        
+        // 현재 체력 비율 계산
+        const healthRatio = this.player.chips / this.player.chipBag;
+        
         // 체력 주머니 업데이트
-        this.player.chipBag = newBag;
-
+        this.player.chipBag = newMaxHealth;
+        
         // 현재 체력 비율 유지
-        const healthRatio = this.player.chips / originalBag;
-        this.player.chips = newBag * healthRatio;
+        this.player.chips = newMaxHealth * healthRatio;
       }
 
       // 하트 3개 달성 시 즉시 아군 소환
@@ -912,7 +915,12 @@ export class Game {
       this.isSpawningEnemies = false;
     }
 
-    if (!this.isSpawningEnemies && this.enemyManager.enemies.length === 0) {
+    // 모든 적대적인 적이 처리되었는지 확인 (죽었거나 아군으로 변경됨)
+    const hasHostileEnemies = this.enemyManager.enemies.some(
+      enemy => !enemy.isDead && !enemy.isAlly
+    );
+
+    if (!this.isSpawningEnemies && !hasHostileEnemies) {
       this.startRoundTransition();
     }
   }
@@ -928,9 +936,15 @@ export class Game {
     this.round++;
     this.isRoundTransition = false;
     this.enemiesKilledInRound = 0;
+    
+    // 새 라운드에서도 살아있는 아군 유지 (clearEnemies 메서드 활용)
+    this.enemyManager.clearEnemies(true); // true = 아군 유지
+    
     this.roundStartTime = Date.now();
     this.enemiesRequiredForNextRound = Math.floor(10 * (1 + this.round * 0.2));
     this.roundDuration = Math.max(15000, 25000 - (this.round - 1) * 2000); // 25초에서 시작하여 라운드당 2초씩 감소, 최소 15초
+
+    console.log(`라운드 ${this.round} 시작, 남은 아군: ${this.enemyManager.enemies.length}명`);
 
     // 보스전이 끝난 후에는 일반 라운드로 진행
     if (this.isBossBattle) {
