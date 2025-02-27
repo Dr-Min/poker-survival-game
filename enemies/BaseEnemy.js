@@ -80,10 +80,10 @@ export class BaseEnemy {
         if (this.tickCount > this.ticksPerFrame) {
           this.tickCount = 0;
           this.frameIndex++;
-          console.log(`[update] 사망 애니메이션 프레임 진행: ${this.frameIndex}/${this.deathFrames}, ID: ${this.id}`);
+          // console.log(`[update] 사망 애니메이션 프레임 진행: ${this.frameIndex}/${this.deathFrames}, ID: ${this.id}`);
           
           if (this.frameIndex >= this.deathFrames) {
-            console.log("[update] 사망 애니메이션 완료:", this.id);
+            // console.log("[update] 사망 애니메이션 완료:", this.id);
             this.deathAnimationComplete = true;
             this.frameIndex = this.deathFrames - 1; // 마지막 프레임으로 고정
           }
@@ -156,7 +156,7 @@ export class BaseEnemy {
               const currentDistance = Math.sqrt(currentDx * currentDx + currentDy * currentDy);
               
               if (currentDistance < attackRange) {
-                console.log("아군이 적에게 데미지를 입힘:", this.attackDamage);
+                // console.log("아군이 적에게 데미지를 입힘:", this.attackDamage);
                 closestEnemy.takeDamage(this.attackDamage);
                 if (window.game && window.game.ui) {
                   window.game.ui.addDamageText(
@@ -221,7 +221,7 @@ export class BaseEnemy {
               const currentDistance = Math.sqrt(currentDx * currentDx + currentDy * currentDy);
               
               if (currentDistance < attackRange) {
-                console.log("적이 플레이어에게 데미지를 입힘:", this.attackDamage);
+                // console.log("적이 플레이어에게 데미지를 입힘:", this.attackDamage);
                 player.takeDamage(this.attackDamage);
                 if (window.game && window.game.ui) {
                   window.game.ui.addDamageText(
@@ -239,7 +239,7 @@ export class BaseEnemy {
               const currentDistance = Math.sqrt(currentDx * currentDx + currentDy * currentDy);
               
               if (currentDistance < attackRange) {
-                console.log("적이 아군에게 데미지를 입힘:", this.attackDamage);
+                // console.log("적이 아군에게 데미지를 입힘:", this.attackDamage);
                 target.takeDamage(this.attackDamage);
                 if (window.game && window.game.ui) {
                   window.game.ui.addDamageText(
@@ -280,12 +280,12 @@ export class BaseEnemy {
       return false;
     }
     
-    console.log(`적 데미지 받음: ${amount}, 현재 체력: ${this.chips}`);
+    // console.log(`적 데미지 받음: ${amount}, 현재 체력: ${this.chips}`);
     this.chips = Math.max(0, this.chips - amount);
-    console.log(`남은 체력: ${this.chips}`);
+    // console.log(`남은 체력: ${this.chips}`);
 
     if (this.chips <= 0 && !this.isDead) {
-      console.log("적 사망 처리 시작:", this.id);
+      // console.log("적 사망 처리 시작:", this.id);
       this.isDead = true;
       this.frameIndex = 0;
       this.tickCount = 0;
@@ -298,16 +298,16 @@ export class BaseEnemy {
       this.isAttacking = false;
       this.attackAnimationStarted = false;
       
-      console.log("적 사망 처리 완료:", this.id);
+      // console.log("적 사망 처리 완료:", this.id);
       return true;
     }
     return false;
   }
 
   tryDropChips() {
-    console.log("칩 드랍 시도 - 이전 드랍 여부:", this.hasDroppedChips);
+    // console.log("칩 드랍 시도 - 이전 드랍 여부:", this.hasDroppedChips);
     if (this.hasDroppedChips) {
-      console.log("이미 칩을 드랍했음");
+      // console.log("이미 칩을 드랍했음");
       return;
     }
 
@@ -328,7 +328,7 @@ export class BaseEnemy {
     }
 
     if (Math.random() > dropChance) {
-      console.log("칩 드랍 실패 (확률)");
+      // console.log("칩 드랍 실패 (확률)");
       return;
     }
 

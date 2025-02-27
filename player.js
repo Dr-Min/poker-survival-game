@@ -9,6 +9,7 @@ export class Player {
     this.speed = 1.6;
     this.chips = 100;
     this.chipBag = 100;
+    console.log("플레이어 초기화: 칩=" + this.chips + ", 칩주머니=" + this.chipBag);
     this.invincible = false;
     this.invincibleTime = 2000;
     this.isDashInvincible = false;
@@ -418,7 +419,10 @@ export class Player {
   takeDamage(amount) {
     if (this.invincible || this.isDashInvincible) return false;
 
+    const oldChips = this.chips;
     this.chips = Math.max(0, this.chips - amount);
+    console.log(`플레이어 데미지: ${oldChips} -> ${this.chips} (데미지량: ${amount}, 최대체력: ${this.chipBag})`);
+    
     this.invincible = true;
     this.isHit = true;
     this.hitFrameIndex = 0;
@@ -454,6 +458,7 @@ export class Player {
   }
 
   heal(amount) {
+    const oldChips = this.chips;
     const missingHealth = this.chipBag - this.chips; // 부족한 체력
 
     if (missingHealth > 0) {
@@ -471,6 +476,8 @@ export class Player {
       this.surplusChips += amount * 0.5; // 획득한 칩의 50%를 잉여칩으로 저장
     }
 
+    console.log(`플레이어 회복: ${oldChips} -> ${this.chips} (회복량: ${amount}, 최대체력: ${this.chipBag})`);
+
     // 칩 획득 텍스트 표시
     if (window.game && window.game.ui) {
       window.game.ui.addDamageText(
@@ -484,7 +491,11 @@ export class Player {
 
   // 칩 주머니 크기 증가 메서드 추가
   increaseBagSize(amount) {
+    console.log(`칩 주머니 크기 증가 메서드 호출됨! 증가량: ${amount}`);
+    const oldBagSize = this.chipBag;
     this.chipBag += amount;
+    console.log(`칩 주머니 크기 증가: ${oldBagSize} -> ${this.chipBag} (증가량: ${amount})`);
+    
     // 칩 주머니 크기 증가 텍스트 표시
     if (window.game && window.game.ui) {
       window.game.ui.addDamageText(

@@ -1,10 +1,10 @@
 export class Boss {
-  constructor(canvas, round = 1) {
+  constructor(round = 1, canvas) {
     this.canvas = canvas;
     this.round = Math.max(1, round || 1);
     
     // 체력 관련 속성 초기화
-    this.chipBag = Math.max(8000, (1500 + ((this.round - 1) * 750)));
+    this.chipBag = 5000 + ((this.round - 1) * 1500);
     this.chips = this.chipBag;
     this.damage = (20 + Math.floor(this.round * 8));
     
@@ -20,7 +20,7 @@ export class Boss {
     this.isDead = false;
 
     // 칩 주머니 드랍 관련 속성 추가
-    this.bagDropAmount = (200 + (this.round * 50)); // 10배로 증가
+    this.bagDropAmount = 20; // 고정 20으로 변경
 
     // 애니메이션 스프라이트 로드
     this.sprites = {

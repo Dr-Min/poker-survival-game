@@ -80,8 +80,9 @@ export class WeaponSystem {
 
     // 스페이드 효과로 인한 데미지 증가
     if (effects.spade) {
+      // 스페이드 1개일 때부터 데미지 25% 증가 적용
       if (effects.spade.count >= 1) damage *= 1.25;
-      if (effects.spade.count >= 2) damage *= 1.15;
+      // 스페이드 3개일 때는 추가 데미지 증가 없음
     }
 
     return damage;

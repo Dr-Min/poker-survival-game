@@ -360,7 +360,7 @@ export class BulletManager {
     }
 
     // 스페이드 효과에 따른 관통 여부 결정
-    const shouldPierce = effects && effects.spade && effects.spade.count >= 1;
+    const shouldPierce = effects && effects.spade && effects.spade.count >= 2;
 
     const bullet = new BaseBullet(
       x,
@@ -639,7 +639,9 @@ export class BulletManager {
   calculateDamage(bullet, enemy, effects) {
     let finalDamage = bullet.damage;
 
-    if (effects.spade.count >= 2) finalDamage *= 1.5;
+    // 스페이드 효과로 인한 데미지 계산
+    // 스페이드 1개일 때는 이미 weapons.js에서 1.25배 증가가 적용됨
+    // 스페이드 3개 이상일 때 30% 확률로 치명타 데미지 발생 (2배)
     if (effects.spade.count >= 3 && Math.random() < 0.3) finalDamage *= 2;
     if (effects.diamond.count >= 4) finalDamage *= 1.3;
 
@@ -651,18 +653,36 @@ export class BulletManager {
     if (!enemy.isAlly) {
       // 하트 카드 3개 이상일 때만 아군 변환 기능 활성화
       if (effects.heart.allyConversionEnabled) {
-        // 5% 확률로 적을 아군으로 변환
-        if (Math.random() < 0.05) {
-          console.log("적을 아군으로 변환 시도:", enemy.id);
-          enemy.isAlly = true;
-          
-          // 체력을 원래 체력의 절반으로 설정
-          enemy.chips = Math.ceil(enemy.maxChips / 2);
-          
-          console.log(`적이 아군으로 변환됨: ${enemy.id}, 체력: ${enemy.chips}/${enemy.maxChips}`);
-          
-          // 아군 변환 성공 시 추가 데미지 적용하지 않음
-          return;
+        // 현재 아군 수 계산
+        const currentAllies = enemies.filter(e => e.isAlly && !e.isDead).length;
+        
+        // 현재 아군 수가 최대 아군 수보다 적을 때만 변환 시도
+        if (currentAllies < effects.heart.maxAllies) {
+          // 변환 확률 적용 (하트 4개 이상이면 10%, 아니면 5%)
+          if (Math.random() < effects.heart.allyConversionChance) {
+            console.log(`적을 아군으로 변환 시도: ${enemy.id} (현재 아군: ${currentAllies}/${effects.heart.maxAllies})`);
+            enemy.isAlly = true;
+            
+            // 체력 설정 (하트 4개 이상이면 원래 체력, 아니면 절반)
+            if (effects.heart.allyFullHealthEnabled) {
+              enemy.chips = enemy.maxChips; // 체력 100%
+            } else {
+              enemy.chips = Math.ceil(enemy.maxChips / 2); // 체력 50%
+            }
+            
+            // 공격력 증가 적용 (하트 4개 이상이면 120% 증가)
+            if (effects.heart.allyDamageBoost > 1) {
+              enemy.attackDamage = Math.ceil(enemy.attackDamage * effects.heart.allyDamageBoost);
+              console.log(`아군 공격력 증가: ${enemy.attackDamage}`);
+            }
+            
+            console.log(`적이 아군으로 변환됨: ${enemy.id}, 체력: ${enemy.chips}/${enemy.maxChips}, 공격력: ${enemy.attackDamage}`);
+            
+            // 아군 변환 성공 시 추가 데미지 적용하지 않음
+            return;
+          }
+        } else {
+          console.log(`아군 변환 실패: 최대 아군 수 초과 (현재: ${currentAllies}/${effects.heart.maxAllies})`);
         }
       }
     }
@@ -728,14 +748,14 @@ export class BulletManager {
 
     // 적 처치 체크
     if (isDead) {
-      console.log("적 처치됨:", {
-        enemyId: enemy.id,
-        position: { x: enemy.x, y: enemy.y },
-        cloverCount: effects.clover.count,
-        byRicochet: bullet.constructor.name.includes("Ricochet"),
-        bulletId: bullet.id,
-        bounceCount: bullet.bounceCount,
-      });
+      // console.log("적 처치됨:", {
+      //   enemyId: enemy.id,
+      //   position: { x: enemy.x, y: enemy.y },
+      //   cloverCount: effects.clover.count,
+      //   byRicochet: bullet.constructor.name.includes("Ricochet"),
+      //   bulletId: bullet.id,
+      //   bounceCount: bullet.bounceCount,
+      // });
     }
   }
 

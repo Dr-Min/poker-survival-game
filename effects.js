@@ -8,6 +8,8 @@ export class Effects {
   }
 
   resetEffects() {
+    console.log("효과 초기화 실행");
+    
     this.effects = {
       spade: {
         count: 0,
@@ -23,7 +25,11 @@ export class Effects {
         bagSizeIncrease: 0,
         ultimateEndTime: 0,
         allyConversionEnabled: false,
+        allyConversionChance: 0.05,
+        allyFullHealthEnabled: false,
+        allyDamageBoost: 1,
         guaranteedDropChance: 0,
+        maxAllies: 0,
       },
       diamond: {
         count: 0,
@@ -54,12 +60,16 @@ export class Effects {
     // 효과 초기화
     this.resetEffects();
 
+    // 카드 카운트 디버그 로그
+    console.log("적용된 카드:", cardCounts);
+
     // 스페이드 효과 적용
     if (cardCounts.spade >= 1) {
-      this.effects.spade.penetrationDamage = 1;
+      // 스페이드 1개일 때 데미지 증가 효과만 적용
+      this.effects.spade.damageIncrease = 0.5;
     }
     if (cardCounts.spade >= 2) {
-      this.effects.spade.damageIncrease = 0.5;
+      this.effects.spade.penetrationDamage = 1; // 2개 이상일 때 관통 효과 적용
     }
     if (cardCounts.spade >= 3) {
       this.effects.spade.criticalChance = 0.3;
@@ -76,16 +86,28 @@ export class Effects {
       this.effects.heart.chipDropMultiplier = 2;
     }
     if (cardCounts.heart >= 2) {
-      this.effects.heart.bagSizeIncrease = 0.2;
+      // 비율 대신 고정값 50으로 변경
+      this.effects.heart.bagSizeIncrease = 50;
+      console.log("하트 2개 이상: 주머니 크기 고정값 50 증가 설정됨");
     }
     if (cardCounts.heart >= 3) {
       // 3개 이상일 때 아군 변환 효과 추가 (실제 변환은 bullet.js에서 처리)
       this.effects.heart.allyConversionEnabled = true;
+      this.effects.heart.allyConversionChance = 0.05;
+      this.effects.heart.maxAllies = 3;
+    }
+    if (cardCounts.heart >= 4) {
+      // 4개 이상일 때 아군 강화 효과
+      this.effects.heart.allyConversionChance = 0.10;
+      this.effects.heart.allyFullHealthEnabled = true;
+      this.effects.heart.allyDamageBoost = 1.2;
+      this.effects.heart.maxAllies = 4;
     }
     if (cardCounts.heart >= 5) {
       // 5개 이상일 때는 칩 드랍 배수를 5로 증가시키고 50% 확률로 드랍하도록 설정
       this.effects.heart.chipDropMultiplier = 5;
       this.effects.heart.guaranteedDropChance = 0.5; // 50% 확률로 칩 드랍
+      this.effects.heart.maxAllies = 5;
     }
 
     // 다이아몬드 효과 적용
@@ -155,18 +177,30 @@ export class Effects {
         `❤️ ${this.effects.heart.count}개: ` +
         `칩 드랍 확률 ${this.effects.heart.chipDropMultiplier}배 증가\n`;
 
+      if (this.effects.heart.count >= 2) {
+        description += `❤️ 2개 이상: 칩 주머니 크기 +50 증가\n`;
+      }
+
       if (this.effects.heart.count >= 3) {
-        description += "❤️ 3개 이상: 적이 총알에 맞을 때 5% 확률로 아군으로 변환\n";
+        description += `❤️ 3개 이상: 적이 총알에 맞을 때 ${this.effects.heart.allyConversionChance * 100}% 확률로 아군으로 변환 (최대 ${this.effects.heart.maxAllies}명)\n`;
+      }
+      
+      if (this.effects.heart.count >= 4) {
+        description += "❤️ 4개 이상: 아군으로 변환 시 체력 100%, 공격력 120% 증가 (최대 4명)\n";
       }
 
       if (this.effects.heart.count >= 5) {
-        description += "❤️ 5개 이상: 50% 확률로 칩 드랍\n";
+        description += "❤️ 5개 이상: 50% 확률로 칩 드랍 (최대 5명 아군)\n";
       }
     }
 
     // 스페이드 효과 설명
     if (this.effects.spade.count > 0) {
       description += `♠️ ${this.effects.spade.count}개: `;
+      
+      if (this.effects.spade.count == 1) {
+        description += `데미지 ${this.effects.spade.damageIncrease * 100}% 증가 `;
+      }
       
       if (this.effects.spade.penetrationDamage > 0) {
         description += `관통 데미지 +${this.effects.spade.penetrationDamage} `;

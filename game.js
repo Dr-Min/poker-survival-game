@@ -204,6 +204,20 @@ export class Game {
     if (e.key === "Escape") {
       this.isPaused = !this.isPaused;
     }
+    
+    // E 키를 눌렀을 때 근처 카드 수집
+    if (e.key.toLowerCase() === "e") {
+      if (this.cardManager.collectNearbyCard()) {
+        // 카드를 수집하면 효과 적용
+        const result = this.applyCardEffects(
+          this.cardManager.getCollectedCards()
+        );
+        if (result.weaponChanged) {
+          this.currentWeapon = result.currentWeapon;
+        }
+        // 카드 획득 효과음 추가 가능 (향후 구현)
+      }
+    }
 
     if (this.isPaused && e.key === "Enter") {
       const cardInfo = this.ui.getDebugCardInfo();
@@ -692,7 +706,7 @@ export class Game {
 
     // 카드가 변경되었을 때 효과 재계산 (개수 변경 또는 카드 교체)
     if (prevCards !== currentCards) {
-      const result = this.effects.applyCardEffects(
+      const result = this.applyCardEffects(
         this.cardManager.getCollectedCards()
       );
       // 무기가 변경되었다면 현재 무기 업데이트
@@ -700,21 +714,34 @@ export class Game {
         this.currentWeapon = result.currentWeapon;
       }
 
-      // 하트 효과 - 칩 주머니 크기 증가 (하트 2개 이상)
-      if (result.effects.heart && result.effects.heart.bagSizeIncrease > 0) {
-        // 기본 체력 설정 (초기값은 100)
-        const baseHealth = 100;
-        // 증가된 체력 계산 (기본 체력 + 증가율)
-        const newMaxHealth = baseHealth * (1 + result.effects.heart.bagSizeIncrease);
-        
-        // 현재 체력 비율 계산
-        const healthRatio = this.player.chips / this.player.chipBag;
-        
-        // 체력 주머니 업데이트
-        this.player.chipBag = newMaxHealth;
-        
-        // 현재 체력 비율 유지
-        this.player.chips = newMaxHealth * healthRatio;
+      // 하트 효과 처리 - 하트 카드 개수에 따라 즉시 체력 변경
+      console.log('하트 효과 체크 시작 - 카드 변경 감지');
+      const heartEffect = result.effects.heart || {};
+      const heartCount = heartEffect.count || 0;
+      console.log('감지된 하트 카드 개수:', heartCount);
+      
+      // 하트 카드 개수에 따라 최대 체력 직접 설정
+      if (heartCount >= 2) {
+        console.log('하트 2개 이상 감지됨, 현재 최대 체력:', this.player.chipBag);
+        // 하트 2개 이상이면 최대 체력 150으로 설정
+        if (this.player.chipBag !== 150) {
+          const currentHealthRatio = this.player.chips / this.player.chipBag;
+          console.log(`하트 ${heartCount}개: 최대 체력을 ${this.player.chipBag}에서 150으로 변경합니다`);
+          this.player.chipBag = 150;
+          const newHealth = Math.max(1, Math.min(150, Math.floor(150 * currentHealthRatio)));
+          this.player.chips = newHealth;
+          console.log(`플레이어 체력 변경: ${newHealth} / 150 (${Math.floor(currentHealthRatio * 100)}%)`);
+        }
+      } else {
+        // 하트 2개 미만이면 최대 체력 100으로 복귀
+        if (this.player.chipBag !== 100) {
+          const currentHealthRatio = this.player.chips / this.player.chipBag;
+          console.log(`하트 ${heartCount}개: 최대 체력을 ${this.player.chipBag}에서 100으로 복원합니다`);
+          this.player.chipBag = 100;
+          const newHealth = Math.max(1, Math.min(100, Math.floor(100 * currentHealthRatio)));
+          this.player.chips = newHealth;
+          console.log(`플레이어 체력 변경: ${newHealth} / 100 (${Math.floor(currentHealthRatio * 100)}%)`);
+        }
       }
 
       // 하트 3개 달성 시 즉시 아군 소환
@@ -968,7 +995,7 @@ export class Game {
 
     if (!afterPoker) {
       // 새로운 보스 생성 및 포커 게임 초기화
-      this.boss = new Boss(this.round);
+      this.boss = new Boss(this.round, this.canvas);
       this.pokerSystem.resetGame();
 
       // 커뮤니티 카드 생성
@@ -1577,6 +1604,49 @@ export class Game {
         console.log("아군 소환됨:", ally);
       }
     }
+  }
+
+  applyCardEffects(collectedCards) {
+    if (!this.effects) return;
+    
+    const result = this.effects.applyCardEffects(collectedCards);
+    console.log("카드 효과 적용 결과:", result);
+    
+    // 하트 효과 직접 적용 - increaseBagSize 메서드 호출 추가
+    if (result.effects && result.effects.heart && result.effects.heart.bagSizeIncrease > 0) {
+      console.log(`하트 효과: 주머니 크기 ${result.effects.heart.bagSizeIncrease} 증가 시도`);
+      this.player.increaseBagSize(result.effects.heart.bagSizeIncrease);
+    }
+    
+    // 하트 카드 효과 직접 적용 (칩 주머니 크기 증가)
+    if (result.effects.heart && result.effects.heart.count >= 2) {
+      // 하트 카드가 2개 이상일 때 최대 체력을 150으로 설정
+      console.log(`하트 ${result.effects.heart.count}개: 최대 체력을 ${this.player.chipBag}에서 150으로 변경합니다`);
+      const currentHealthRatio = this.player.chips / this.player.chipBag;
+      this.player.chipBag = 150;
+      const newHealth = Math.max(1, Math.min(150, Math.floor(150 * currentHealthRatio)));
+      this.player.chips = newHealth;
+      console.log(`플레이어 체력 변경: ${newHealth}/${this.player.chipBag}`);
+    } else if (this.player.chipBag > 100) {
+      // 하트 카드가 2개 미만일 때 최대 체력을 100으로 복원
+      console.log(`하트 ${result.effects.heart.count}개: 최대 체력을 ${this.player.chipBag}에서 100으로 복원합니다`);
+      const currentHealthRatio = this.player.chips / this.player.chipBag;
+      this.player.chipBag = 100;
+      const newHealth = Math.max(1, Math.min(100, Math.floor(100 * currentHealthRatio)));
+      this.player.chips = newHealth;
+      console.log(`플레이어 체력 변경: ${newHealth}/${this.player.chipBag}`);
+    }
+    
+    // 무기 변경 메시지 표시
+    if (result.weaponChanged) {
+      this.ui.addDamageText(
+        this.player.x,
+        this.player.y - 30,
+        `새 무기: ${result.currentWeapon.name}`,
+        "#ffff00"
+      );
+    }
+    return result;
   }
 }
 

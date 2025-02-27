@@ -94,6 +94,9 @@ export class CardManager {
       clover: {},
     };
     this.loadCardImages();
+    
+    // 플레이어 근처에 있는 카드 추적용 변수 추가
+    this.nearbyCard = null;
   }
 
   async loadCardImages() {
@@ -149,7 +152,7 @@ export class CardManager {
   }
 
   updateChipDrops(player) {
-    console.log(`칩 드랍 업데이트: 현재 칩 개수: ${this.chipDrops.length}`);
+    // console.log(`칩 드랍 업데이트: 현재 칩 개수: ${this.chipDrops.length}`);
     for (let i = this.chipDrops.length - 1; i >= 0; i--) {
       const chip = this.chipDrops[i];
       
@@ -235,14 +238,18 @@ export class CardManager {
 
   updateCards(player, effects) {
     const now = Date.now();
+    
+    // 근처 카드 초기화
+    this.nearbyCard = null;
+    
     this.cards = this.cards.filter((card) => {
       if (now - card.createdAt > 7000) {
         return false;
       }
 
+      // 충돌 체크하여 근처에 있는 카드로 표시만 하고 수집하지 않음
       if (checkCollision(player, card)) {
-        this.collectCard(card.type, card.number);
-        return false;
+        this.nearbyCard = card;
       }
       return true;
     });
@@ -260,7 +267,24 @@ export class CardManager {
   }
 
   drawCards(ctx) {
-    this.cards.forEach((card) => card.draw(ctx, this.cardImages));
+    this.cards.forEach((card) => {
+      card.draw(ctx, this.cardImages);
+      
+      // 근처에 있는 카드에 시각적 표시 추가
+      if (card === this.nearbyCard) {
+        ctx.beginPath();
+        ctx.arc(card.x, card.y, card.size * 1.5, 0, Math.PI * 2);
+        ctx.strokeStyle = "#ffff00";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // 'E' 키 안내 텍스트 추가
+        ctx.font = "12px Arial";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.fillText("[E] 획득", card.x, card.y - card.size * 2);
+      }
+    });
     this.drawChipDrops(ctx);
   }
 
@@ -271,5 +295,16 @@ export class CardManager {
   clearCards() {
     this.collectedCards = [];
     this.cards = [];
+  }
+
+  // E키를 눌렀을 때 근처 카드 수집 메서드 추가
+  collectNearbyCard() {
+    if (this.nearbyCard) {
+      this.collectCard(this.nearbyCard.type, this.nearbyCard.number);
+      this.cards = this.cards.filter(card => card !== this.nearbyCard);
+      this.nearbyCard = null;
+      return true;
+    }
+    return false;
   }
 }
