@@ -39,9 +39,14 @@ export class Effects {
         count: 0,
         slowAmount: 0,
         stunDuration: 0,
-        aoeSlow: false,
         damageAmplify: 0,
-        ultimateEndTime: 0,
+        playerAuraEnabled: false,
+        playerAuraRadius: 0,
+        playerAuraSlowAmount: 0,
+        freezeEnabled: false,
+        globalFreezeEnabled: false,
+        globalFreezeDuration: 1500,
+        globalFreezeInterval: 5000,
       },
       clover: {
         count: 0,
@@ -132,13 +137,16 @@ export class Effects {
       this.effects.diamond.stunDuration = 1000;
     }
     if (cardCounts.diamond >= 3) {
-      this.effects.diamond.aoeSlow = true;
+      this.effects.diamond.playerAuraEnabled = true;
+      this.effects.diamond.playerAuraRadius = 150;
+      this.effects.diamond.playerAuraSlowAmount = 0.6;
     }
     if (cardCounts.diamond >= 4) {
-      this.effects.diamond.damageAmplify = 0.3;
+      this.effects.diamond.freezeEnabled = true;
     }
     if (cardCounts.diamond >= 5) {
-      this.effects.diamond.ultimateEndTime = Date.now() + 5000;
+      this.effects.diamond.globalFreezeEnabled = true;
+      console.log("다이아몬드 5개 효과 활성화: 5초마다 모든 적 1.5초간 정지");
     }
 
     // 클로버 효과 적용
@@ -245,28 +253,28 @@ export class Effects {
     }
 
     // 다이아몬드 효과 설명
-    if (this.effects.diamond.count > 0) {
-      description += `♦️ ${this.effects.diamond.count}개: `;
-
-      if (this.effects.diamond.slowAmount > 0) {
-        description += `슬로우 ${this.effects.diamond.slowAmount * 100}% `;
-      }
-
-      if (this.effects.diamond.stunDuration > 0) {
-        description += `스턴 ${this.effects.diamond.stunDuration / 1000}초 `;
-      }
-
-      if (this.effects.diamond.aoeSlow) {
-        description += `범위 슬로우 `;
-      }
-
-      if (this.effects.diamond.damageAmplify > 0) {
-        description += `데미지 증폭 ${
-          this.effects.diamond.damageAmplify * 100
-        }% `;
-      }
-
-      description += "\n";
+    if (this.effects.diamond.count === 1) {
+      description += "다이아: 맞은 적 30% 감속 / ";
+    } else if (this.effects.diamond.count === 2) {
+      description += "다이아: 맞은 적 30% 감속 + 1초 기절 / ";
+    } else if (this.effects.diamond.count === 3) {
+      description += `다이아: 맞은 적 30% 감속 + 1초 기절 + 플레이어 주변 ${
+        this.effects.diamond.playerAuraRadius
+      }픽셀 내 적 ${this.effects.diamond.playerAuraSlowAmount * 100}% 감속 / `;
+    } else if (this.effects.diamond.count === 4) {
+      description += `다이아: 맞은 적 30% 감속 + 1초 기절 + 플레이어 주변 ${
+        this.effects.diamond.playerAuraRadius
+      }픽셀 내 적 ${
+        this.effects.diamond.playerAuraSlowAmount * 100
+      }% 감속 + 4초마다 주변 적 완전 정지 / `;
+    } else if (this.effects.diamond.count >= 5) {
+      description += `다이아: 맞은 적 30% 감속 + 1초 기절 + 플레이어 주변 ${
+        this.effects.diamond.playerAuraRadius
+      }픽셀 내 적 ${
+        this.effects.diamond.playerAuraSlowAmount * 100
+      }% 감속 + 4초마다 주변 적 완전 정지 + 5초마다 모든 적 1.5초간 정지 / `;
+    } else {
+      description += "다이아: 없음 / ";
     }
 
     // 클로버 효과 설명

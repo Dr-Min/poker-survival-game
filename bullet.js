@@ -273,6 +273,81 @@ class ExplosionAnimation {
   }
 }
 
+// 범위 감속 효과 시각화 클래스
+class AOEIndicator {
+  constructor(
+    x,
+    y,
+    radius,
+    color = "rgba(0, 191, 255, 0.03)",
+    followPlayer = false
+  ) {
+    this.x = x;
+    this.y = y;
+    this.radius = radius;
+    this.color = color;
+    this.duration = followPlayer ? 9999999 : 3000; // 플레이어를 따라다니는 효과는 매우 긴 지속시간
+    this.startTime = Date.now();
+    this.finished = false;
+    this.pulseSpeed = 0.003; // 맥박 효과 속도
+    this.followPlayer = followPlayer; // 플레이어를 따라다니는지 여부
+    this.scaleFactor = 1;
+    this.game = null; // 생성 시에는 game이 null, 나중에 설정
+  }
+
+  setGame(game) {
+    this.game = game;
+  }
+
+  update() {
+    const elapsed = Date.now() - this.startTime;
+
+    // 플레이어 위치 업데이트 (플레이어를 따라다니는 경우)
+    if (this.followPlayer && this.game && this.game.player) {
+      this.x = this.game.player.x;
+      this.y = this.game.player.y;
+    }
+
+    // 남은 시간에 따른 투명도 계산
+    const remainingTime = Math.max(0, this.duration - elapsed);
+    const alpha = this.followPlayer
+      ? 0.03 // 최대 투명도를 0.03으로 제한 (매우 투명하게)
+      : (remainingTime / this.duration) * 0.03;
+
+    // 색상 업데이트 (투명도 적용)
+    const baseColor = this.color.substring(0, this.color.lastIndexOf(","));
+    this.color = `${baseColor}, ${alpha})`;
+
+    // 맥박 효과를 위한 크기 변화 (0.9 ~ 1.1 범위에서 변동)
+    const pulse = 0.1 * Math.sin(elapsed * this.pulseSpeed);
+    this.scaleFactor = 1 + pulse;
+
+    if (!this.followPlayer && elapsed >= this.duration) {
+      this.finished = true;
+    }
+  }
+
+  draw(ctx) {
+    ctx.save();
+
+    // 범위 표시 원 (더 투명하게)
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius * this.scaleFactor, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 중앙 다이아몬드 심볼 (◆) - 크기 절반으로 줄임
+    const symbolSize = Math.min(15, this.radius / 6); // 절반 크기로 줄임
+    ctx.fillStyle = "rgba(0, 191, 255, 0.8)";
+    ctx.font = `bold ${symbolSize}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("◆", this.x, this.y);
+
+    ctx.restore();
+  }
+}
+
 export class BulletManager {
   constructor(game) {
     this.game = game;
@@ -280,6 +355,16 @@ export class BulletManager {
     this.ricochetBullets = [];
     this.explosionAnimations = [];
     this.ui = null;
+    this.playerAuraActive = false;
+    this.playerAuraRadius = 150;
+    this.playerAuraSlowAmount = 0.6;
+    this.lastAuraUpdateTime = 0;
+    this.lastAuraLogTime = 0;
+    this.lastEnemyLogTime = 0;
+    this.lastEffectLogTime = 0;
+    this.lastFreezeTime = 0; // 마지막 정지 효과 적용 시간
+    this.freezeDuration = 1400; // 정지 지속 시간 (1.4초)
+    this.lastGlobalFreezeTime = 0; // 마지막 전체 맵 정지 효과 적용 시간
   }
 
   setUI(ui) {
@@ -537,6 +622,9 @@ export class BulletManager {
   updateBullets(canvas, enemies, effects) {
     const currentEffects = JSON.parse(JSON.stringify(effects));
 
+    // 다이아몬드 3개 효과: 플레이어 주변 감속 효과 적용
+    this.updatePlayerSlowAura(enemies, currentEffects);
+
     // 일반 총알 업데이트
     this.bullets = this.bullets.filter((bullet) => {
       bullet.update(canvas);
@@ -729,6 +817,8 @@ export class BulletManager {
     if (effects.diamond.count >= 1) enemy.speed *= 0.7;
     if (effects.diamond.count >= 2) enemy.stunEndTime = Date.now() + 1000;
 
+    // 다이아몬드 3개 효과는 updatePlayerSlowAura에서 처리하므로 제거
+
     // 데미지 적용
     const isDead = enemy.takeDamage(damage);
     bullet.hitEnemies.push(enemy.id);
@@ -852,10 +942,7 @@ export class BulletManager {
           const isDead = enemy.takeDamage(explosionDamage);
           affectedEnemies.push(enemy);
 
-          // 다이아몬드 범위 감속 효과
-          if (effects.diamond.count >= 3) {
-            enemy.speed *= 0.7;
-          }
+          // 다이아몬드 범위 감속 효과 제거 (플레이어 중심으로 이동)
 
           if (isDead) {
             // 클로버 2차 폭발
@@ -1066,6 +1153,265 @@ export class BulletManager {
     this.bullets = [];
     this.ricochetBullets = [];
     this.explosionAnimations = [];
+    this.playerAuraActive = false;
     console.log("모든 총알 초기화 완료");
+  }
+
+  // 플레이어 주변 감속 효과 메서드 업데이트
+  updatePlayerSlowAura(enemies, effects) {
+    // 다이아몬드 3개 이상이고 playerAuraEnabled가 true일 때만 작동
+    if (
+      !effects.diamond ||
+      effects.diamond.count < 3 ||
+      !effects.diamond.playerAuraEnabled ||
+      !this.game ||
+      !this.game.player
+    ) {
+      if (this.playerAuraActive) {
+        this.playerAuraActive = false;
+        console.log("다이아 오오라 비활성화됨");
+      }
+      return;
+    }
+
+    const now = Date.now();
+    // shouldFreezeEnemies 변수 선언 추가
+    let shouldFreezeEnemies = false;
+    let shouldGlobalFreezeEnemies = false;
+
+    // 처음 활성화될 때 또는 5초마다 로그 출력
+    if (!this.playerAuraActive || now - this.lastAuraLogTime > 5000) {
+      console.log("다이아 효과 상태:", {
+        다이아개수: effects.diamond.count,
+        오오라활성화: effects.diamond.playerAuraEnabled,
+        오오라범위: effects.diamond.playerAuraRadius,
+        감속량: effects.diamond.playerAuraSlowAmount,
+        전체맵정지: effects.diamond.globalFreezeEnabled || false,
+      });
+      this.lastAuraLogTime = now;
+    }
+
+    // 200ms마다 업데이트 (성능 최적화)
+    if (now - this.lastAuraUpdateTime < 200) {
+      return;
+    }
+    this.lastAuraUpdateTime = now;
+
+    // 플레이어 위치
+    const player = this.game.player;
+    const playerX = player.x;
+    const playerY = player.y;
+
+    // effects에서 설정된 값 사용
+    const auraRadius = effects.diamond.playerAuraRadius || 150;
+    const slowAmount = effects.diamond.playerAuraSlowAmount || 0.6;
+
+    // 이전에 활성화되지 않았다면 시각적 효과 추가
+    if (!this.playerAuraActive) {
+      this.playerAuraActive = true;
+      console.log("다이아 오오라 활성화됨!");
+
+      // 시각적 효과 추가 (지속적인 효과)
+      if (this.ui) {
+        const aoeIndicator = new AOEIndicator(
+          playerX,
+          playerY,
+          auraRadius,
+          "rgba(0, 191, 255, 0.03)",
+          true // 플레이어를 따라다니는 지속 효과
+        );
+        aoeIndicator.setGame(this.game);
+        this.ui.addVisualEffect(aoeIndicator, true);
+      }
+    }
+
+    // 속도 변경된 적의 수 카운트
+    let slowedEnemyCount = 0;
+    let normalEnemyCount = 0;
+    let frozenEnemyCount = 0;
+    let globalFrozenEnemyCount = 0;
+
+    // 다이아 4개 이상일 때 4초마다 플레이어 주변 적들 완전 정지
+    if (effects.diamond.count >= 4 && effects.diamond.freezeEnabled) {
+      // 마지막 정지 효과로부터 4초 이상 지났으면 새로운 정지 효과 적용
+      if (now - this.lastFreezeTime >= 4000) {
+        this.lastFreezeTime = now;
+        shouldFreezeEnemies = true;
+        console.log("다이아 4개 효과: 플레이어 주변 적 정지 효과 발동!");
+      }
+      // 현재 정지 효과가 활성화된 상태인지 확인
+      else if (now - this.lastFreezeTime < this.freezeDuration) {
+        shouldFreezeEnemies = true;
+      }
+    }
+
+    // 다이아 5개 이상일 때 5초마다 모든 적 완전 정지 (거리 제한 없음)
+    if (effects.diamond.count >= 5 && effects.diamond.globalFreezeEnabled) {
+      const globalFreezeInterval = effects.diamond.globalFreezeInterval || 5000;
+      const globalFreezeDuration = effects.diamond.globalFreezeDuration || 1500;
+
+      // 마지막 전체 정지 효과로부터 5초 이상 지났으면 새로운 전체 정지 효과 적용
+      if (now - this.lastGlobalFreezeTime >= globalFreezeInterval) {
+        this.lastGlobalFreezeTime = now;
+        shouldGlobalFreezeEnemies = true;
+        console.log("다이아 5개 효과: 모든 적 정지 효과 발동!");
+
+        // 전체 맵 정지 효과를 위한 시각적 효과 추가 (일시적인 효과)
+        if (this.ui) {
+          // 화면 전체를 덮는 효과 (맵 크기 대략 1200x800으로 가정)
+          const globalEffect = new AOEIndicator(
+            600, // 화면 중앙 X
+            400, // 화면 중앙 Y
+            1000, // 화면을 충분히 덮는 반경
+            "rgba(0, 191, 255, 0.05)", // 약간 더 진한 색상
+            false // 일시적인 효과
+          );
+          globalEffect.duration = globalFreezeDuration; // 효과 지속 시간 조정
+          this.ui.addVisualEffect(globalEffect, false);
+        }
+      }
+      // 현재 전체 정지 효과가 활성화된 상태인지 확인
+      else if (now - this.lastGlobalFreezeTime < globalFreezeDuration) {
+        shouldGlobalFreezeEnemies = true;
+      }
+    }
+
+    // 범위 내 모든 적 감속
+    enemies.forEach((enemy) => {
+      if (enemy.isDead || enemy.isAlly) return;
+
+      const dx = enemy.x - playerX;
+      const dy = enemy.y - playerY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // 전체 맵 정지 효과 적용 (거리 제한 없음)
+      if (shouldGlobalFreezeEnemies) {
+        if (!enemy.isGlobalFrozen) {
+          enemy.isGlobalFrozen = true;
+          if (!enemy.originalSpeed) {
+            enemy.originalSpeed = enemy.speed;
+          }
+          enemy.previousSpeed = enemy.speed; // 현재 속도 저장
+          enemy.speed = 0; // 완전 정지
+          globalFrozenEnemyCount++;
+        }
+        // 다른 효과는 처리하지 않고 여기서 return
+        return;
+      }
+      // 전체 맵 정지 효과가 끝났는지 확인
+      else if (enemy.isGlobalFrozen) {
+        enemy.isGlobalFrozen = false;
+        // 원래 상태로 돌아갈 때 플레이어 범위 내에 있는지 확인
+        if (distance <= auraRadius) {
+          // 범위 내에 있으면 감속 상태로
+          enemy.speed = enemy.originalSpeed * (1 - slowAmount);
+          slowedEnemyCount++;
+        } else {
+          // 범위 밖에 있으면 원래 속도로
+          enemy.speed = enemy.originalSpeed || enemy.defaultSpeed;
+          normalEnemyCount++;
+        }
+        // 다른 효과는 처리하지 않고 여기서 return
+        return;
+      }
+
+      // 플레이어 주변 효과 처리 (거리 기반)
+      if (distance <= auraRadius) {
+        // 적이 이미 오오라 효과를 받고 있는지 확인
+        if (enemy.defaultSpeed && !enemy.isPlayerAuraSlowed) {
+          enemy.isPlayerAuraSlowed = true;
+          enemy.originalSpeed = enemy.speed;
+        }
+
+        // 다이아 4개 이상일 때 4초마다 완전 정지 효과 적용
+        if (shouldFreezeEnemies) {
+          if (!enemy.isFrozen) {
+            enemy.isFrozen = true;
+            enemy.previousSpeed = enemy.speed; // 현재 속도 저장
+            enemy.speed = 0; // 완전 정지
+            frozenEnemyCount++;
+          }
+        }
+        // 정지 효과가 끝났는지 확인
+        else if (enemy.isFrozen) {
+          enemy.isFrozen = false;
+          enemy.speed = enemy.originalSpeed * (1 - slowAmount); // 정지 후 다시 감속 상태로
+          slowedEnemyCount++;
+        }
+        // 일반 감속 효과 적용
+        else {
+          const newSpeed = enemy.originalSpeed * (1 - slowAmount);
+          enemy.speed = newSpeed;
+          slowedEnemyCount++;
+        }
+      }
+      // 범위 밖으로 나갔을 때
+      else {
+        // 완전 정지 효과 제거
+        if (enemy.isFrozen) {
+          enemy.isFrozen = false;
+          enemy.speed = enemy.originalSpeed || enemy.defaultSpeed;
+        }
+
+        // 일반 감속 효과 제거
+        if (enemy.isPlayerAuraSlowed) {
+          enemy.isPlayerAuraSlowed = false;
+          enemy.speed = enemy.originalSpeed || enemy.defaultSpeed;
+        }
+
+        normalEnemyCount++;
+      }
+    });
+
+    // 정지 효과가 적용되었을 때 또는 5초마다 로그 출력
+    if (
+      shouldFreezeEnemies ||
+      shouldGlobalFreezeEnemies ||
+      now - this.lastEffectLogTime > 5000
+    ) {
+      console.log(
+        `다이아 오오라 상태 - 감속된 적: ${slowedEnemyCount}, 주변 정지된 적: ${frozenEnemyCount}, 전체 정지된 적: ${globalFrozenEnemyCount}, 일반 속도 적: ${normalEnemyCount}`
+      );
+      this.lastEffectLogTime = now;
+    }
+  }
+
+  // AOE 인디케이터 수정 - 플레이어를 따라다니는 기능 추가
+  applyAreaSlow(x, y, radius, slowAmount, enemies) {
+    console.log(
+      `범위 감속 적용: 위치(${x}, ${y}), 반경(${radius}), 감속률(${slowAmount})`
+    );
+
+    enemies.forEach((targetEnemy) => {
+      // 이미 죽었거나 아군인 적은 제외
+      if (targetEnemy.isDead || targetEnemy.isAlly) return;
+
+      // 거리 계산
+      const dx = targetEnemy.x - x;
+      const dy = targetEnemy.y - y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // 범위 내 적에게 감속 적용
+      if (distance <= radius) {
+        const originalSpeed = targetEnemy.speed;
+        targetEnemy.speed *= 1 - slowAmount;
+
+        console.log(
+          `적 ${targetEnemy.id}에게 범위 감속 적용: ${originalSpeed.toFixed(
+            2
+          )} -> ${targetEnemy.speed.toFixed(2)}`
+        );
+
+        // 3초 후 원래 속도로 복구
+        setTimeout(() => {
+          if (!targetEnemy.isDead) {
+            targetEnemy.speed = targetEnemy.defaultSpeed;
+            console.log(`적 ${targetEnemy.id}의 감속 효과 종료`);
+          }
+        }, 3000);
+      }
+    });
+
+    return true;
   }
 }

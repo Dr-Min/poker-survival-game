@@ -6,6 +6,7 @@ export class UI {
     this.collectedCards = [];
     this.cardClickAreas = [];
     this.damageTexts = [];
+    this.visualEffects = [];
     this.cardBackImage = new Image();
     this.cardBackImage.src = "V2_4x/PixelPlebes_V2_4x__53.png";
     this.weaponSprite = new Image();
@@ -184,6 +185,9 @@ export class UI {
 
     // 데미지 텍스트 업데이트 및 그리기
     this.updateDamageTexts();
+
+    // 시각 효과 업데이트 및 그리기
+    this.updateVisualEffects();
   }
 
   drawHealthBar(player) {
@@ -1578,6 +1582,30 @@ export class UI {
       "새 게임을 시작하려면 페이지를 새로고침하세요",
       this.canvas.width / 2,
       this.canvas.height - 50
+    );
+  }
+
+  // 시각 효과 추가
+  addVisualEffect(effect, isPersistent = false) {
+    if (!effect) return;
+
+    effect.isPersistent = isPersistent; // 지속적인 효과인지 여부
+    this.visualEffects.push(effect);
+    console.log(
+      `시각 효과 추가: ${effect.constructor.name}, 지속 효과: ${isPersistent}`
+    );
+  }
+
+  // 시각 효과 업데이트 및 그리기
+  updateVisualEffects() {
+    this.visualEffects.forEach((effect) => {
+      effect.update();
+      effect.draw(this.ctx);
+    });
+
+    // 지속적이지 않은 효과만 필터링 (지속 효과는 계속 유지)
+    this.visualEffects = this.visualEffects.filter(
+      (effect) => effect.isPersistent || !effect.finished
     );
   }
 }
