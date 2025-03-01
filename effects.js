@@ -9,7 +9,7 @@ export class Effects {
 
   resetEffects() {
     console.log("효과 초기화 실행");
-    
+
     this.effects = {
       spade: {
         count: 0,
@@ -18,6 +18,10 @@ export class Effects {
         criticalChance: 0,
         aoeEnabled: false,
         ultimateEndTime: 0,
+        orbitingCardsEnabled: false,
+        orbitingCardsCount: 0,
+        orbitingCardSpeedBoost: 1,
+        orbitingCardDamageBoost: 1,
       },
       heart: {
         count: 0,
@@ -75,9 +79,19 @@ export class Effects {
       this.effects.spade.criticalChance = 0.3;
     }
     if (cardCounts.spade >= 4) {
-      this.effects.spade.aoeEnabled = true;
+      // 스페이드 4개 이상일 때 플레이어 주변을 도는 카드 활성화
+      this.effects.spade.orbitingCardsEnabled = true;
+      this.effects.spade.orbitingCardsCount = 4; // 4개의 카드 (실제 수집한 카드)
     }
     if (cardCounts.spade >= 5) {
+      // 5개 이상일 때 회전 카드 강화
+      this.effects.spade.orbitingCardsCount = 5; // 5개 카드로 증가
+      this.effects.spade.orbitingCardSpeedBoost = 1.2; // 회전 속도 20% 증가
+      this.effects.spade.orbitingCardDamageBoost = 1.5; // 회전 카드 데미지 50% 증가
+      this.effects.spade.criticalChance = 0.5; // 치명타 확률 50%로 증가
+      console.log(
+        "스페이드 5개 이상: 회전 카드 강화 - 5개로 증가, 속도 20% 증가, 데미지 50% 증가, 치명타 확률 50%"
+      );
       this.effects.spade.ultimateEndTime = Date.now() + 10000;
     }
 
@@ -98,7 +112,7 @@ export class Effects {
     }
     if (cardCounts.heart >= 4) {
       // 4개 이상일 때 아군 강화 효과
-      this.effects.heart.allyConversionChance = 0.10;
+      this.effects.heart.allyConversionChance = 0.1;
       this.effects.heart.allyFullHealthEnabled = true;
       this.effects.heart.allyDamageBoost = 1.2;
       this.effects.heart.maxAllies = 4;
@@ -182,11 +196,14 @@ export class Effects {
       }
 
       if (this.effects.heart.count >= 3) {
-        description += `❤️ 3개 이상: 적이 총알에 맞을 때 ${this.effects.heart.allyConversionChance * 100}% 확률로 아군으로 변환 (최대 ${this.effects.heart.maxAllies}명)\n`;
+        description += `❤️ 3개 이상: 적이 총알에 맞을 때 ${
+          this.effects.heart.allyConversionChance * 100
+        }% 확률로 아군으로 변환 (최대 ${this.effects.heart.maxAllies}명)\n`;
       }
-      
+
       if (this.effects.heart.count >= 4) {
-        description += "❤️ 4개 이상: 아군으로 변환 시 체력 100%, 공격력 120% 증가 (최대 4명)\n";
+        description +=
+          "❤️ 4개 이상: 아군으로 변환 시 체력 100%, 공격력 120% 증가 (최대 4명)\n";
       }
 
       if (this.effects.heart.count >= 5) {
@@ -197,76 +214,86 @@ export class Effects {
     // 스페이드 효과 설명
     if (this.effects.spade.count > 0) {
       description += `♠️ ${this.effects.spade.count}개: `;
-      
+
       if (this.effects.spade.count == 1) {
-        description += `데미지 ${this.effects.spade.damageIncrease * 100}% 증가 `;
+        description += `데미지 ${
+          this.effects.spade.damageIncrease * 100
+        }% 증가 `;
       }
-      
+
       if (this.effects.spade.penetrationDamage > 0) {
         description += `관통 데미지 +${this.effects.spade.penetrationDamage} `;
       }
-      
+
       if (this.effects.spade.damageIncrease > 0) {
-        description += `데미지 ${this.effects.spade.damageIncrease * 100}% 증가 `;
+        description += `데미지 ${
+          this.effects.spade.damageIncrease * 100
+        }% 증가 `;
       }
-      
+
       if (this.effects.spade.criticalChance > 0) {
-        description += `크리티컬 확률 ${this.effects.spade.criticalChance * 100}% `;
+        description += `크리티컬 확률 ${
+          this.effects.spade.criticalChance * 100
+        }% `;
       }
-      
-      if (this.effects.spade.aoeEnabled) {
-        description += `범위 공격 활성화 `;
+
+      if (this.effects.spade.orbitingCardsEnabled) {
+        description += `회전 카드 활성화 (${this.effects.spade.orbitingCardsCount}장의 스페이드 카드가 적을 공격) `;
       }
-      
+
       description += "\n";
     }
 
     // 다이아몬드 효과 설명
     if (this.effects.diamond.count > 0) {
       description += `♦️ ${this.effects.diamond.count}개: `;
-      
+
       if (this.effects.diamond.slowAmount > 0) {
         description += `슬로우 ${this.effects.diamond.slowAmount * 100}% `;
       }
-      
+
       if (this.effects.diamond.stunDuration > 0) {
         description += `스턴 ${this.effects.diamond.stunDuration / 1000}초 `;
       }
-      
+
       if (this.effects.diamond.aoeSlow) {
         description += `범위 슬로우 `;
       }
-      
+
       if (this.effects.diamond.damageAmplify > 0) {
-        description += `데미지 증폭 ${this.effects.diamond.damageAmplify * 100}% `;
+        description += `데미지 증폭 ${
+          this.effects.diamond.damageAmplify * 100
+        }% `;
       }
-      
+
       description += "\n";
     }
 
     // 클로버 효과 설명
     if (this.effects.clover.count > 0) {
       description += `♣️ ${this.effects.clover.count}개: `;
-      
+
       if (this.effects.clover.ricochetChance > 0) {
-        description += `튕김 확률 ${this.effects.clover.ricochetChance * 100}% `;
+        description += `튕김 확률 ${
+          this.effects.clover.ricochetChance * 100
+        }% `;
       }
-      
+
       if (this.effects.clover.explosionEnabled) {
         description += `폭발 활성화 `;
       }
-      
+
       if (this.effects.clover.bounceCount > 0) {
         description += `튕김 횟수 +${this.effects.clover.bounceCount} `;
       }
-      
+
       if (this.effects.clover.explosionSize > 1) {
         description += `폭발 크기 x${this.effects.clover.explosionSize} `;
       }
-      
+
       description += "\n";
     }
-    
+
     return description;
   }
 }

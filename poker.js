@@ -1,3 +1,10 @@
+// 포커 게임 페이즈 정의
+export const POKER_PHASES = {
+  SELECTION: "selection",
+  BETTING: "betting",
+  SHOWDOWN: "showdown",
+};
+
 export class PokerSystem {
   constructor() {
     this.communityCards = [];

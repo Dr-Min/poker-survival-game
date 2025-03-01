@@ -37,7 +37,7 @@ export class EnemyManager {
   spawnEnemy(canvas, round, isRoundTransition) {
     if (isRoundTransition || !this.game.isSpawningEnemies) return;
 
-    if (Math.random() < 0.03 * (1 + round * 0.05)) {
+    if (Math.random() < 0.01 * (1 + round * 0.05)) {
       const side = Math.floor(Math.random() * 4);
       let x, y;
 

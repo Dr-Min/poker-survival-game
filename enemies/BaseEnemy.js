@@ -48,6 +48,12 @@ export class BaseEnemy {
     this.deathMaxCount = 60;
     this.fadeAlpha = 1;
     this.isFlipped = false;
+
+    // 넉백 관련 속성 추가
+    this.knockbackX = 0;
+    this.knockbackY = 0;
+    this.knockbackDuration = 0;
+    this.knockbackEndTime = 0;
   }
 
   loadSprites(runSpritePath, attackSpritePath, deathSpritePath) {
@@ -95,6 +101,26 @@ export class BaseEnemy {
       }
 
       return this.deathCount < this.deathMaxCount;
+    }
+
+    // 넉백 상태 체크 및 처리
+    if (this.knockbackEndTime > 0 && now < this.knockbackEndTime) {
+      // 넉백 중에는 추가 이동 억제 (이미 위치가 업데이트됨)
+      // 넉백 효과 감소 계산
+      const remainingTime =
+        (this.knockbackEndTime - now) / this.knockbackDuration;
+
+      // 넉백 효과가 끝나갈 때 천천히 원래 속도로 복구 - 다이아몬드 기능과 중복되므로 제거
+      // if (remainingTime < 0.5) {
+      //   this.speed = this.defaultSpeed * (1 - remainingTime * 2);
+      // }
+
+      return true;
+    } else if (this.knockbackEndTime > 0 && now >= this.knockbackEndTime) {
+      // 넉백 종료
+      this.knockbackEndTime = 0;
+      // 넉백 종료 시 속도 복구 제거 (다이아몬드 기능과 중복)
+      // this.speed = this.defaultSpeed;
     }
 
     if (this.stunEndTime && now < this.stunEndTime) return true;
@@ -636,5 +662,28 @@ export class BaseEnemy {
     }
 
     ctx.restore();
+  }
+
+  // 넉백 효과 적용 메서드
+  applyKnockback(kbX, kbY) {
+    // 넉백 벡터 저장
+    this.knockbackX = kbX;
+    this.knockbackY = kbY;
+
+    // 넉백 상태 설정
+    this.knockbackDuration = 300; // 넉백 지속 시간 (ms)
+    this.knockbackEndTime = Date.now() + this.knockbackDuration;
+
+    // 즉시 위치 이동 적용
+    this.x += kbX;
+    this.y += kbY;
+
+    // 화면 밖으로 나가지 않도록 제한
+    this.x = Math.max(this.size, Math.min(1200 - this.size, this.x));
+    this.y = Math.max(this.size, Math.min(800 - this.size, this.y));
+
+    console.log(
+      `적 ${this.id} 넉백 적용: [${kbX.toFixed(2)}, ${kbY.toFixed(2)}]`
+    );
   }
 }

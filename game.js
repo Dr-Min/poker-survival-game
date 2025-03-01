@@ -2,10 +2,12 @@ import { Player } from "./player.js";
 import { BulletManager } from "./bullet.js";
 import { EnemyManager } from "./enemies/index.js";
 import { CardManager } from "./card.js";
+import { getHighestPokerHand } from "./pokerHands.js";
 import { Effects } from "./effects.js";
 import { UI } from "./ui.js";
 import { Boss } from "./boss.js";
-import { PokerSystem } from "./poker.js";
+import { PokerSystem, POKER_PHASES } from "./poker.js";
+import { OrbitingCard } from "./orbitingCard.js";
 
 export class Game {
   constructor() {
@@ -103,6 +105,11 @@ export class Game {
     // 자동 발사 관련 속성 추가
     this.lastAutoShootTime = 0;
     this.autoShootInterval = 250; // 자동 발사 간격을 100ms (0.1초)로 변경
+
+    // 오비탈 카드 관리
+    this.orbitingCards = [];
+    this.lastOrbitingCardsUpdate = 0;
+    this.lastSpadeCount = 0;
 
     // 이벤트 리스너 설정
     this.setupEventListeners();
@@ -204,7 +211,7 @@ export class Game {
     if (e.key === "Escape") {
       this.isPaused = !this.isPaused;
     }
-    
+
     // E 키를 눌렀을 때 근처 카드 수집
     if (e.key.toLowerCase() === "e") {
       if (this.cardManager.collectNearbyCard()) {
@@ -715,32 +722,53 @@ export class Game {
       }
 
       // 하트 효과 처리 - 하트 카드 개수에 따라 즉시 체력 변경
-      console.log('하트 효과 체크 시작 - 카드 변경 감지');
+      console.log("하트 효과 체크 시작 - 카드 변경 감지");
       const heartEffect = result.effects.heart || {};
       const heartCount = heartEffect.count || 0;
-      console.log('감지된 하트 카드 개수:', heartCount);
-      
+      console.log("감지된 하트 카드 개수:", heartCount);
+
       // 하트 카드 개수에 따라 최대 체력 직접 설정
       if (heartCount >= 2) {
-        console.log('하트 2개 이상 감지됨, 현재 최대 체력:', this.player.chipBag);
+        console.log(
+          "하트 2개 이상 감지됨, 현재 최대 체력:",
+          this.player.chipBag
+        );
         // 하트 2개 이상이면 최대 체력 150으로 설정
         if (this.player.chipBag !== 150) {
           const currentHealthRatio = this.player.chips / this.player.chipBag;
-          console.log(`하트 ${heartCount}개: 최대 체력을 ${this.player.chipBag}에서 150으로 변경합니다`);
+          console.log(
+            `하트 ${heartCount}개: 최대 체력을 ${this.player.chipBag}에서 150으로 변경합니다`
+          );
           this.player.chipBag = 150;
-          const newHealth = Math.max(1, Math.min(150, Math.floor(150 * currentHealthRatio)));
+          const newHealth = Math.max(
+            1,
+            Math.min(150, Math.floor(150 * currentHealthRatio))
+          );
           this.player.chips = newHealth;
-          console.log(`플레이어 체력 변경: ${newHealth} / 150 (${Math.floor(currentHealthRatio * 100)}%)`);
+          console.log(
+            `플레이어 체력 변경: ${newHealth} / 150 (${Math.floor(
+              currentHealthRatio * 100
+            )}%)`
+          );
         }
       } else {
         // 하트 2개 미만이면 최대 체력 100으로 복귀
         if (this.player.chipBag !== 100) {
           const currentHealthRatio = this.player.chips / this.player.chipBag;
-          console.log(`하트 ${heartCount}개: 최대 체력을 ${this.player.chipBag}에서 100으로 복원합니다`);
+          console.log(
+            `하트 ${heartCount}개: 최대 체력을 ${this.player.chipBag}에서 100으로 복원합니다`
+          );
           this.player.chipBag = 100;
-          const newHealth = Math.max(1, Math.min(100, Math.floor(100 * currentHealthRatio)));
+          const newHealth = Math.max(
+            1,
+            Math.min(100, Math.floor(100 * currentHealthRatio))
+          );
           this.player.chips = newHealth;
-          console.log(`플레이어 체력 변경: ${newHealth} / 100 (${Math.floor(currentHealthRatio * 100)}%)`);
+          console.log(
+            `플레이어 체력 변경: ${newHealth} / 100 (${Math.floor(
+              currentHealthRatio * 100
+            )}%)`
+          );
         }
       }
 
@@ -770,6 +798,9 @@ export class Game {
     );
 
     this.checkRoundProgress();
+
+    // 오비탈 카드 업데이트 (추가)
+    this.updateOrbitingCards(currentTime);
   }
 
   draw() {
@@ -859,6 +890,7 @@ export class Game {
 
     // 게임 요소 그리기
     this.player.draw(this.ctx, this.debugOptions.showHitboxes);
+    this.drawOrbitingCards(); // 회전 카드 그리기
     this.cardManager.drawCards(this.ctx);
     this.enemyManager.drawEnemies(this.ctx);
     this.bulletManager.drawBullets(this.ctx);
@@ -944,7 +976,7 @@ export class Game {
 
     // 모든 적대적인 적이 처리되었는지 확인 (죽었거나 아군으로 변경됨)
     const hasHostileEnemies = this.enemyManager.enemies.some(
-      enemy => !enemy.isDead && !enemy.isAlly
+      (enemy) => !enemy.isDead && !enemy.isAlly
     );
 
     if (!this.isSpawningEnemies && !hasHostileEnemies) {
@@ -963,15 +995,17 @@ export class Game {
     this.round++;
     this.isRoundTransition = false;
     this.enemiesKilledInRound = 0;
-    
+
     // 새 라운드에서도 살아있는 아군 유지 (clearEnemies 메서드 활용)
     this.enemyManager.clearEnemies(true); // true = 아군 유지
-    
+
     this.roundStartTime = Date.now();
     this.enemiesRequiredForNextRound = Math.floor(10 * (1 + this.round * 0.2));
     this.roundDuration = Math.max(15000, 25000 - (this.round - 1) * 2000); // 25초에서 시작하여 라운드당 2초씩 감소, 최소 15초
 
-    console.log(`라운드 ${this.round} 시작, 남은 아군: ${this.enemyManager.enemies.length}명`);
+    console.log(
+      `라운드 ${this.round} 시작, 남은 아군: ${this.enemyManager.enemies.length}명`
+    );
 
     // 보스전이 끝난 후에는 일반 라운드로 진행
     if (this.isBossBattle) {
@@ -1498,9 +1532,7 @@ export class Game {
     });
 
     // 효과 재계산
-    const result = this.applyCardEffects(
-      this.cardManager.getCollectedCards()
-    );
+    const result = this.applyCardEffects(this.cardManager.getCollectedCards());
     if (result.weaponChanged) {
       this.currentWeapon = result.currentWeapon;
     }
@@ -1608,35 +1640,51 @@ export class Game {
 
   applyCardEffects(collectedCards) {
     if (!this.effects) return;
-    
+
     const result = this.effects.applyCardEffects(collectedCards);
     console.log("카드 효과 적용 결과:", result);
-    
+
     // 하트 효과 직접 적용 - increaseBagSize 메서드 호출 추가
-    if (result.effects && result.effects.heart && result.effects.heart.bagSizeIncrease > 0) {
-      console.log(`하트 효과: 주머니 크기 ${result.effects.heart.bagSizeIncrease} 증가 시도`);
+    if (
+      result.effects &&
+      result.effects.heart &&
+      result.effects.heart.bagSizeIncrease > 0
+    ) {
+      console.log(
+        `하트 효과: 주머니 크기 ${result.effects.heart.bagSizeIncrease} 증가 시도`
+      );
       this.player.increaseBagSize(result.effects.heart.bagSizeIncrease);
     }
-    
+
     // 하트 카드 효과 직접 적용 (칩 주머니 크기 증가)
     if (result.effects.heart && result.effects.heart.count >= 2) {
       // 하트 카드가 2개 이상일 때 최대 체력을 150으로 설정
-      console.log(`하트 ${result.effects.heart.count}개: 최대 체력을 ${this.player.chipBag}에서 150으로 변경합니다`);
+      console.log(
+        `하트 ${result.effects.heart.count}개: 최대 체력을 ${this.player.chipBag}에서 150으로 변경합니다`
+      );
       const currentHealthRatio = this.player.chips / this.player.chipBag;
       this.player.chipBag = 150;
-      const newHealth = Math.max(1, Math.min(150, Math.floor(150 * currentHealthRatio)));
+      const newHealth = Math.max(
+        1,
+        Math.min(150, Math.floor(150 * currentHealthRatio))
+      );
       this.player.chips = newHealth;
       console.log(`플레이어 체력 변경: ${newHealth}/${this.player.chipBag}`);
     } else if (this.player.chipBag > 100) {
       // 하트 카드가 2개 미만일 때 최대 체력을 100으로 복원
-      console.log(`하트 ${result.effects.heart.count}개: 최대 체력을 ${this.player.chipBag}에서 100으로 복원합니다`);
+      console.log(
+        `하트 ${result.effects.heart.count}개: 최대 체력을 ${this.player.chipBag}에서 100으로 복원합니다`
+      );
       const currentHealthRatio = this.player.chips / this.player.chipBag;
       this.player.chipBag = 100;
-      const newHealth = Math.max(1, Math.min(100, Math.floor(100 * currentHealthRatio)));
+      const newHealth = Math.max(
+        1,
+        Math.min(100, Math.floor(100 * currentHealthRatio))
+      );
       this.player.chips = newHealth;
       console.log(`플레이어 체력 변경: ${newHealth}/${this.player.chipBag}`);
     }
-    
+
     // 무기 변경 메시지 표시
     if (result.weaponChanged) {
       this.ui.addDamageText(
@@ -1647,6 +1695,82 @@ export class Game {
       );
     }
     return result;
+  }
+
+  // 회전 카드 업데이트 메서드
+  updateOrbitingCards(now) {
+    const effects = this.effects.getEffects();
+
+    // 스페이드 효과로 오비탈 카드 활성화 확인
+    const shouldHaveOrbitingCards =
+      effects.spade && effects.spade.orbitingCardsEnabled;
+    const desiredCardCount = effects.spade
+      ? effects.spade.orbitingCardsCount
+      : 0;
+
+    // 플레이어가 모은 스페이드 카드 찾기
+    const spadeCards = this.cardManager
+      .getCollectedCards()
+      .filter((card) => card.type === "spade");
+
+    // 오비탈 카드 초기화 (효과 활성화/비활성화 시)
+    if (shouldHaveOrbitingCards && spadeCards.length >= 4) {
+      const cardsHaveChanged =
+        this.orbitingCards.length !== desiredCardCount ||
+        this.lastSpadeCount !== spadeCards.length;
+
+      // 카드 개수가 변경되었거나 스페이드 카드가 변경되었을 때만 카드 재생성
+      if (cardsHaveChanged) {
+        console.log(
+          `오비탈 카드 변경: ${this.orbitingCards.length} -> ${desiredCardCount} (수집한 스페이드 카드: ${spadeCards.length}개)`
+        );
+
+        // 현재 스페이드 카드 개수 저장
+        this.lastSpadeCount = spadeCards.length;
+
+        // 기존 카드 제거
+        this.orbitingCards = [];
+
+        // 모은 카드 중 첫 4장(또는 5장)을 사용
+        const selectedCards = spadeCards.slice(0, desiredCardCount);
+
+        // 각 카드별로 회전하는 카드 생성 (cardManager 전달)
+        selectedCards.forEach((card, index) => {
+          this.orbitingCards.push(
+            new OrbitingCard(
+              this.player,
+              index,
+              selectedCards.length,
+              card.type,
+              card.number,
+              this.cardManager.cardImages // 카드 이미지 전달
+            )
+          );
+        });
+      }
+    } else if (!shouldHaveOrbitingCards || spadeCards.length < 4) {
+      // 활성화 조건 불충족 시 카드 제거
+      if (this.orbitingCards.length > 0) {
+        console.log("오비탈 카드 효과 비활성화 (스페이드 카드 부족)");
+        this.orbitingCards = [];
+        this.lastSpadeCount = 0;
+      }
+    }
+
+    // 각 카드 업데이트
+    if (this.orbitingCards.length > 0) {
+      this.orbitingCards.forEach((card) => {
+        card.update(now);
+        card.checkCollisions(this.enemyManager.enemies, now);
+      });
+    }
+  }
+
+  // 회전 카드 그리기 메서드
+  drawOrbitingCards() {
+    if (this.orbitingCards.length > 0) {
+      this.orbitingCards.forEach((card) => card.draw(this.ctx));
+    }
   }
 }
 

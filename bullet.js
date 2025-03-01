@@ -645,8 +645,21 @@ export class BulletManager {
 
     // 스페이드 효과로 인한 데미지 계산
     // 스페이드 1개일 때는 이미 weapons.js에서 1.25배 증가가 적용됨
-    // 스페이드 3개 이상일 때 30% 확률로 치명타 데미지 발생 (2배)
-    if (effects.spade.count >= 3 && Math.random() < 0.3) finalDamage *= 2;
+
+    // 치명타 확률 계산 (효과에 설정된 값 우선 사용)
+    let critChance = 0;
+    if (effects.spade && effects.spade.criticalChance) {
+      critChance = effects.spade.criticalChance; // 효과에 지정된 치명타 확률 사용 (5개 이상일 때 50%)
+    } else if (effects.spade && effects.spade.count >= 3) {
+      critChance = 0.3; // 기존 로직 (3개 이상일 때 30%)
+    }
+
+    // 치명타 적용
+    if (critChance > 0 && Math.random() < critChance) {
+      finalDamage *= 2;
+      console.log(`치명타 발생! 데미지 2배: ${finalDamage}`);
+    }
+
     if (effects.diamond.count >= 4) finalDamage *= 1.3;
 
     return finalDamage;
