@@ -209,7 +209,7 @@ export class BaseEnemy {
           }, 300);
         }
       } else {
-        // 적이 없으면 플레이어 주변에 머무름
+        // 적이 없으면 플레이어 주변에 머무름 (플레이어를 공격하지 않음)
         targetX = player.x + (Math.random() * 100 - 50);
         targetY = player.y + (Math.random() * 100 - 50);
       }
@@ -229,7 +229,7 @@ export class BaseEnemy {
       // 가장 가까운 아군 찾기
       if (window.game && window.game.enemyManager) {
         window.game.enemyManager.enemies.forEach((ally) => {
-          if (!ally.isDead && ally.isAlly) {
+          if (!ally.isDead && ally.isAlly && ally !== this) {
             const dx = ally.x - this.x;
             const dy = ally.y - this.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
@@ -259,6 +259,14 @@ export class BaseEnemy {
         setTimeout(() => {
           if (this.isAttacking) {
             if (target === player) {
+              // 아군이 플레이어를 공격하지 않도록 함
+              if (this.isAlly) {
+                console.log(
+                  `아군이 플레이어 공격을 시도했지만 차단됨: ${this.id}`
+                );
+                return;
+              }
+
               const currentDx = player.x - this.x;
               const currentDy = player.y - this.y;
               const currentDistance = Math.sqrt(

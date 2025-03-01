@@ -54,26 +54,54 @@ export class FourLegsEnemy extends BaseEnemy {
     let target = player;
     let targetDistance = Infinity;
 
-    const dxPlayer = player.x - this.x;
-    const dyPlayer = player.y - this.y;
-    const distanceToPlayer = Math.sqrt(
-      dxPlayer * dxPlayer + dyPlayer * dyPlayer
-    );
-    targetDistance = distanceToPlayer;
+    if (this.isAlly) {
+      if (window.game && window.game.enemyManager) {
+        window.game.enemyManager.enemies.forEach((enemy) => {
+          if (!enemy.isDead && !enemy.isAlly && enemy !== this) {
+            const dx = enemy.x - this.x;
+            const dy = enemy.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (window.game && window.game.enemyManager) {
-      window.game.enemyManager.enemies.forEach((ally) => {
-        if (!ally.isDead && ally.isAlly) {
-          const dx = ally.x - this.x;
-          const dy = ally.y - this.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < targetDistance && Math.random() < 0.55) {
-            targetDistance = distance;
-            target = ally;
+            if (distance < targetDistance) {
+              targetDistance = distance;
+              target = enemy;
+            }
           }
+        });
+
+        if (targetDistance === Infinity) {
+          const randomOffsetX = Math.random() * 100 - 50;
+          const randomOffsetY = Math.random() * 100 - 50;
+
+          return this.moveToPosition(
+            player.x + randomOffsetX,
+            player.y + randomOffsetY,
+            now
+          );
         }
-      });
+      }
+    } else {
+      const dxPlayer = player.x - this.x;
+      const dyPlayer = player.y - this.y;
+      const distanceToPlayer = Math.sqrt(
+        dxPlayer * dxPlayer + dyPlayer * dyPlayer
+      );
+      targetDistance = distanceToPlayer;
+
+      if (window.game && window.game.enemyManager) {
+        window.game.enemyManager.enemies.forEach((ally) => {
+          if (!ally.isDead && ally.isAlly && ally !== this) {
+            const dx = ally.x - this.x;
+            const dy = ally.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < targetDistance && Math.random() < 0.55) {
+              targetDistance = distance;
+              target = ally;
+            }
+          }
+        });
+      }
     }
 
     const targetX = target.x;
@@ -96,6 +124,13 @@ export class FourLegsEnemy extends BaseEnemy {
           const currentDistance = Math.sqrt(
             currentDx * currentDx + currentDy * currentDy
           );
+
+          if (target === player && this.isAlly) {
+            console.log(
+              `아군 4LEGS가 플레이어 공격을 시도했지만 차단됨: ${this.id}`
+            );
+            return;
+          }
 
           if (target === player) {
             const isInvincible = player.invincible || player.isDashInvincible;
@@ -141,30 +176,37 @@ export class FourLegsEnemy extends BaseEnemy {
               }
             }
           } else if (target !== player && !target.isDead) {
-            if (currentDistance < attackRange) {
-              console.log(
-                "4LEGS가 아군에게 데미지를 입힘:",
-                this.id,
-                "->",
-                target.id,
-                "데미지량:",
-                this.attackDamage
+            const damageText = this.isAlly
+              ? "아군 4LEGS가 적에게 데미지를 입힘:"
+              : "4LEGS가 아군에게 데미지를 입힘:";
+
+            console.log(
+              damageText,
+              this.id,
+              "->",
+              target.id,
+              "데미지량:",
+              this.attackDamage
+            );
+            target.takeDamage(this.attackDamage);
+            if (window.game && window.game.ui) {
+              const damageColor = this.isAlly ? "#00ff00" : "#ff6600";
+              window.game.ui.addDamageText(
+                target.x,
+                target.y - target.size,
+                this.attackDamage,
+                damageColor
               );
-              target.takeDamage(this.attackDamage);
-              if (window.game && window.game.ui) {
-                window.game.ui.addDamageText(
-                  target.x,
-                  target.y - target.size,
-                  this.attackDamage,
-                  "#ff6600"
-                );
-              }
             }
           }
         }
       }, 200);
     }
 
+    return this.moveToPosition(targetX, targetY, now);
+  }
+
+  moveToPosition(targetX, targetY, now) {
     const dx = targetX - this.x;
     const dy = targetY - this.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
