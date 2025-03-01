@@ -420,6 +420,10 @@ export class UI {
     // 데미지 값을 정수로 반올림
     const roundedDamage = Math.round(damage);
 
+    console.log(
+      `데미지 텍스트 추가: ${roundedDamage}, 색상: ${color}, 위치: (${x}, ${y})`
+    );
+
     this.damageTexts.push({
       x: x,
       y: y - 30, // 캐릭터 위에 표시되도록 Y 좌표 조정

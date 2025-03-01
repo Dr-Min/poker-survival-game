@@ -9,9 +9,11 @@ export class Player {
     this.speed = 1.6;
     this.chips = 100;
     this.chipBag = 100;
-    console.log("플레이어 초기화: 칩=" + this.chips + ", 칩주머니=" + this.chipBag);
+    console.log(
+      "플레이어 초기화: 칩=" + this.chips + ", 칩주머니=" + this.chipBag
+    );
     this.invincible = false;
-    this.invincibleTime = 2000;
+    this.invincibleTime = 1000;
     this.isDashInvincible = false;
     this.bulletSpeed = 5.6;
     this.lastShot = 0;
@@ -22,7 +24,7 @@ export class Player {
     // 대시 관련 속성 수정
     this.dashSpeed = 6; // 대시 속도 절반으로 감소
     this.dashDuration = 200; // 대시 지속시간 (ms) - 200ms에서 400ms로 증가
-    this.dashInvincibleDuration = 1000; // 대시 무적 지속시간 (1초)
+    this.dashInvincibleDuration = 500; // 대시 무적 지속시간 (0.5초)
     this.dashCooldown = 500; // 개별 대시 쿨다운 (0.5초)
     this.dashRechargeTime = 5000; // 대시 충전 시간 (5초)
     this.isDashing = false;
@@ -220,7 +222,7 @@ export class Player {
       this.isDashing = false;
     }, this.dashDuration);
 
-    // 대시 무적 종료 (1초 후)
+    // 대시 무적 종료 (0.5초 후)
     setTimeout(() => {
       this.isDashInvincible = false;
       console.log("무적 판정 종료 - 대시");
@@ -287,7 +289,7 @@ export class Player {
       this.isDashing = false;
     }, this.dashDuration);
 
-    // 대시 무적 종료 (1초 후)
+    // 대시 무적 종료 (0.5초 후)
     setTimeout(() => {
       this.isDashInvincible = false;
       console.log("무적 판정 종료 - 대시");
@@ -311,27 +313,36 @@ export class Player {
     this.lastMouseX = this.mouseX;
     this.lastMouseY = this.mouseY;
 
+    // 무적 상태에서 깜빡임 효과를 더 자주 적용 (0.1초마다 깜빡임)
     if (
-      !this.invincible ||
-      !this.isDashInvincible ||
+      (!this.invincible && !this.isDashInvincible) ||
       Math.floor(Date.now() / 100) % 2
     ) {
       ctx.save();
       ctx.translate(this.x, this.y);
 
-      // 히트박스 항상 표시
+      // 히트박스 표시
       ctx.strokeStyle =
         this.invincible || this.isDashInvincible
-          ? "rgba(0, 255, 0, 0.5)"
+          ? "rgba(0, 255, 0, 0.8)"
           : "rgba(255, 0, 0, 0.5)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(0, 0, this.size / 2, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 대시 중일 때만 무적 텍스트 표시
-      if (this.isDashInvincible && this.isDashing) {
-        ctx.fillStyle = "#00ff00";
+      // 무적 상태 표시 강화
+      if (this.invincible || this.isDashInvincible) {
+        // 무적 오오라 효과
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = this.isDashInvincible ? "#4a90e2" : "#ffff00";
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // 무적 텍스트 표시
+        ctx.fillStyle = this.isDashInvincible ? "#4a90e2" : "#ffff00";
         ctx.font = "12px Arial";
         ctx.fillText("무적", -15, -this.size);
       }
@@ -417,16 +428,24 @@ export class Player {
   }
 
   takeDamage(amount) {
-    if (this.invincible || this.isDashInvincible) return false;
+    if (this.invincible || this.isDashInvincible) {
+      console.log(`🛡️ 플레이어가 무적 상태로 데미지를 무시: ${amount}`);
+      return false;
+    }
 
     const oldChips = this.chips;
     this.chips = Math.max(0, this.chips - amount);
-    console.log(`플레이어 데미지: ${oldChips} -> ${this.chips} (데미지량: ${amount}, 최대체력: ${this.chipBag})`);
-    
+    console.log(
+      `💥 플레이어 데미지: ${oldChips} -> ${this.chips} (데미지량: ${amount}, 최대체력: ${this.chipBag})`
+    );
+
     this.invincible = true;
     this.isHit = true;
     this.hitFrameIndex = 0;
     this.hitLastFrameTime = Date.now();
+    console.log(
+      `🛡️ 플레이어 무적 상태 시작 - ${this.invincibleTime}ms 동안 지속`
+    );
 
     // 데미지 텍스트 표시 (숫자만 표시)
     if (window.game && window.game.ui) {
@@ -452,6 +471,7 @@ export class Player {
 
     setTimeout(() => {
       this.invincible = false;
+      console.log(`🛡️ 플레이어 무적 상태 종료`);
     }, this.invincibleTime);
 
     return true;
@@ -476,7 +496,9 @@ export class Player {
       this.surplusChips += amount * 0.5; // 획득한 칩의 50%를 잉여칩으로 저장
     }
 
-    console.log(`플레이어 회복: ${oldChips} -> ${this.chips} (회복량: ${amount}, 최대체력: ${this.chipBag})`);
+    console.log(
+      `플레이어 회복: ${oldChips} -> ${this.chips} (회복량: ${amount}, 최대체력: ${this.chipBag})`
+    );
 
     // 칩 획득 텍스트 표시
     if (window.game && window.game.ui) {
@@ -494,8 +516,10 @@ export class Player {
     console.log(`칩 주머니 크기 증가 메서드 호출됨! 증가량: ${amount}`);
     const oldBagSize = this.chipBag;
     this.chipBag += amount;
-    console.log(`칩 주머니 크기 증가: ${oldBagSize} -> ${this.chipBag} (증가량: ${amount})`);
-    
+    console.log(
+      `칩 주머니 크기 증가: ${oldBagSize} -> ${this.chipBag} (증가량: ${amount})`
+    );
+
     // 칩 주머니 크기 증가 텍스트 표시
     if (window.game && window.game.ui) {
       window.game.ui.addDamageText(
