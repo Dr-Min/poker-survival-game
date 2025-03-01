@@ -173,7 +173,10 @@ class RicochetBullet extends BaseBullet {
     super(startX, startY, 0, 0, size, damage * damageMult, true, "#50ff50");
     this.targetEnemy = targetEnemy;
     this.bounceCount = bounceCount;
+
+    // 클로버 3개 이상일 때 최대 튕김 횟수 3, 아니면 1
     this.maxBounces = effects.clover.count >= 3 ? 3 : 1;
+
     this.speed = 4.2;
     this.effects = effects;
     this.hitEnemies = [sourceEnemy.id];
@@ -1007,29 +1010,78 @@ export class BulletManager {
       );
 
       if (nearbyEnemies.length > 0) {
-        const target = this.findClosestEnemy(sourceEnemy, nearbyEnemies);
+        // 클로버 5개 효과가 활성화되었을 때는 최대 5개의 도탄 생성
+        if (effects.clover.count >= 5 && effects.clover.multiBounceEnabled) {
+          console.log("클로버 5개 효과: 한 번에 최대 5개의 도탄 생성");
 
-        // 클로버 개수에 따른 도탄 생성
-        const ricochetBullet = new RicochetBullet(
-          sourceEnemy,
-          target,
-          sourceBullet.size,
-          sourceBullet.damage,
-          effects,
-          effects.clover.count >= 3 ? 0 : 1 // 클로버 3개 이상일 때는 0부터 시작
-        );
+          // 최대 5개의 적 선택 (또는 가능한 모든 적)
+          const maxTargets = Math.min(5, nearbyEnemies.length);
+          const targetEnemies = [];
 
-        // hitEnemies 배열 초기화 (현재 맞은 적만 포함)
-        ricochetBullet.hitEnemies = [sourceEnemy.id];
-        this.ricochetBullets.push(ricochetBullet);
+          // 가장 가까운 적부터 최대 5개 선택
+          const sortedEnemies = [...nearbyEnemies].sort((a, b) => {
+            const distA = Math.sqrt(
+              Math.pow(a.x - sourceEnemy.x, 2) +
+                Math.pow(a.y - sourceEnemy.y, 2)
+            );
+            const distB = Math.sqrt(
+              Math.pow(b.x - sourceEnemy.x, 2) +
+                Math.pow(b.y - sourceEnemy.y, 2)
+            );
+            return distA - distB;
+          });
 
-        console.log("도탄 생성됨:", {
-          시작위치: { x: sourceEnemy.x, y: sourceEnemy.y },
-          목표위치: { x: target.x, y: target.y },
-          클로버개수: effects.clover.count,
-          현재_도탄수: ricochetBullet.bounceCount,
-          최대_도탄수: ricochetBullet.maxBounces,
-        });
+          // 선택된 적들에게 도탄 생성
+          for (let i = 0; i < maxTargets; i++) {
+            const target = sortedEnemies[i];
+            const ricochetBullet = new RicochetBullet(
+              sourceEnemy,
+              target,
+              sourceBullet.size,
+              sourceBullet.damage,
+              effects,
+              0 // 클로버 5개 효과는 각 도탄이 독립적이므로 bounceCount는 0으로 시작
+            );
+
+            // hitEnemies 배열 초기화 (현재 맞은 적만 포함)
+            ricochetBullet.hitEnemies = [sourceEnemy.id];
+            this.ricochetBullets.push(ricochetBullet);
+
+            console.log(`도탄 ${i + 1}/${maxTargets} 생성:`, {
+              시작위치: { x: sourceEnemy.x, y: sourceEnemy.y },
+              목표위치: { x: target.x, y: target.y },
+              거리: Math.sqrt(
+                Math.pow(target.x - sourceEnemy.x, 2) +
+                  Math.pow(target.y - sourceEnemy.y, 2)
+              ),
+            });
+          }
+        } else {
+          // 기존 로직: 가장 가까운 적 하나에게만 도탄
+          const target = this.findClosestEnemy(sourceEnemy, nearbyEnemies);
+
+          // 클로버 개수에 따른 도탄 생성
+          const ricochetBullet = new RicochetBullet(
+            sourceEnemy,
+            target,
+            sourceBullet.size,
+            sourceBullet.damage,
+            effects,
+            effects.clover.count >= 3 ? 0 : 1 // 클로버 3개 이상일 때는 0부터 시작
+          );
+
+          // hitEnemies 배열 초기화 (현재 맞은 적만 포함)
+          ricochetBullet.hitEnemies = [sourceEnemy.id];
+          this.ricochetBullets.push(ricochetBullet);
+
+          console.log("도탄 생성됨:", {
+            시작위치: { x: sourceEnemy.x, y: sourceEnemy.y },
+            목표위치: { x: target.x, y: target.y },
+            클로버개수: effects.clover.count,
+            현재_도탄수: ricochetBullet.bounceCount,
+            최대_도탄수: ricochetBullet.maxBounces,
+          });
+        }
       }
     }
   }

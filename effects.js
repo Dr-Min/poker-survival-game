@@ -55,6 +55,7 @@ export class Effects {
         bounceCount: 0,
         explosionSize: 1,
         ultimateEndTime: 0,
+        multiBounceEnabled: false,
       },
     };
   }
@@ -164,6 +165,10 @@ export class Effects {
     }
     if (cardCounts.clover >= 5) {
       this.effects.clover.ultimateEndTime = Date.now() + 15000;
+      this.effects.clover.multiBounceEnabled = true; // 모든 적에게 도탄이 튕기는 효과 활성화
+      console.log(
+        "클로버 5개 효과 활성화: 총알이 한 번에 최대 5개의 적에게 도탄 튕김"
+      );
     }
 
     // 카드 개수 저장
@@ -297,6 +302,10 @@ export class Effects {
 
       if (this.effects.clover.explosionSize > 1) {
         description += `폭발 크기 x${this.effects.clover.explosionSize} `;
+      }
+
+      if (this.effects.clover.multiBounceEnabled) {
+        description += `클로버 5개: 총알이 한 번에 최대 5개의 적에게 도탄 튕김 `;
       }
 
       description += "\n";
