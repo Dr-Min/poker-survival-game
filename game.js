@@ -22,15 +22,27 @@ export class Game {
 
     // 화면 크기 초기화 - 먼저 실행하여 캔버스 크기 설정
     this.handleResize();
+    
+    // 디버그 옵션 추가
+    this.debugOptions = {
+      showFPS: false,
+      showHitboxes: true, // 히트박스 표시 기본 활성화
+      showPlayerStats: false,
+      logCollisions: true, // 충돌 로그 표시 옵션
+      invincibleMode: false // 무적 모드 옵션
+    };
+    
+    // 편집 모드 설정
+    this.isEditMode = false;
 
     // 게임 상태 초기화
     this.score = 0;
     this.keys = {};
     this.mouseX = 0;
     this.mouseY = 0;
-    this.isStartScreen = false; // 시작 화면 상태 변경
+    this.isStartScreen = true; // 시작 화면 상태 추가
     this.isVillageMode = true; // 마을 모드 활성화
-
+    
     // 매니저 클래스 초기화 - 플레이어를 먼저 생성
     this.player = new Player(this.canvas);
     
@@ -666,11 +678,21 @@ export class Game {
   gameLoop() {
     if (this.isVillageMode) {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-      // 마을 모드 그리기
-      this.village.draw(this.player);
+      
+      // 플레이어 이동 처리 (이전 위치 저장)
+      this.prevPlayerX = this.player.x;
+      this.prevPlayerY = this.player.y;
       
       // 플레이어 이동 처리
       this.player.move(this.keys, this.mouseX, this.mouseY, this.joystick);
+      
+      // 마을에서 플레이어와 건물 충돌 처리
+      if (this.village) {
+        this.village.handlePlayerMovement(this.player, this.keys);
+      }
+      
+      // 마을 모드 그리기
+      this.village.draw(this.player);
       
       // 플레이어 그리기
       this.player.draw(this.ctx, this.debugOptions.showHitboxes);
@@ -1918,9 +1940,28 @@ export class Game {
     
     console.log("마을로 돌아왔습니다. 게임 상태 초기화 완료.");
   }
+
+  doLinesIntersect(p1, p2, p3, p4) {
+    function ccw(a, b, c) {
+      return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
+    }
+    
+    return ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
+  }
 }
 
 window.onload = function () {
   const game = new Game();
   window.game = game; // 전역 변수로 game 인스턴스 저장
+};
+
+// 기본 레이아웃 데이터 정의
+const defaultLayout = {
+  "buildings": [
+    { "name": "의료소", "x": 0.38666666666666666, "y": 0.18125000000000002 },
+    { "name": "레스토랑", "x": 0.4875, "y": 0.25000000000000006 },
+    { "name": "총포상", "x": 0.5958333333333332, "y": 0.29 },
+    { "name": "창고", "x": 0.31666666666666665, "y": 0.41 }
+  ],
+  "warpPoint": { "x": 0.8125, "y": 0.72625 }
 };

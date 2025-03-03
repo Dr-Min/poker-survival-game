@@ -1,0 +1,1349 @@
+// village.js - 留덉쓣 愿??湲곕뒫???대떦?섎뒗 紐⑤뱢
+
+export class Village {
+  constructor(canvas, game) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.game = game;
+    
+    // 留덉쓣 諛곌꼍 ?대?吏
+    this.villageBackground = "rgba(50, 120, 80, 0.3)"; // ?꾩떆 諛곌꼍??    
+    // ?쒕옒洹?愿???곹깭 異붽?
+    this.isDragging = false;
+    this.draggedBuilding = null;
+    this.draggedWarpPoint = false;
+    this.dragOffsetX = 0;
+    this.dragOffsetY = 0;
+    
+    // 異⑸룎 踰붿쐞 議곗젙 愿???띿꽦 異붽?
+    this.isAdjustingCollision = false;
+    this.selectedBuilding = null;
+    this.collisionMargin = 10; // 湲곕낯 異⑸룎 ?щ갚
+    this.adjustingCorner = null; // 議곗젙 以묒씤 紐⑥꽌由? 'tl', 'tr', 'bl', 'br'
+    this.isEditingPolygon = false; // ?ㅺ컖???몄쭛 紐⑤뱶
+    this.selectedVertex = null; // ?좏깮???뺤젏 ?몃뜳??    
+    // 湲곕낯 ?덉씠?꾩썐 ?ㅼ젙 (?ъ슜???쒓났 ?곗씠??
+    const defaultLayout = {
+      "buildings": [
+        {
+          "name": "?섎즺??,
+          "x": 0.38666666666666666,
+          "y": 0.18125000000000002
+        },
+        {
+          "name": "?덉뒪?좊옉",
+          "x": 0.4875,
+          "y": 0.25000000000000006
+        },
+        {
+          "name": "珥앺룷??,
+          "x": 0.5958333333333332,
+          "y": 0.29
+        },
+        {
+          "name": "李쎄퀬",
+          "x": 0.31666666666666665,
+          "y": 0.41
+        }
+      ],
+      "warpPoint": {
+        "x": 0.8125,
+        "y": 0.72625
+      }
+    };
+    
+    // 嫄대Ъ ?대?吏 濡쒕뱶
+    this.loadBuildingImages();
+    
+    // ?대깽??由ъ뒪??珥덇린??    this.initEventListeners();
+  }
+  
+  // ?대깽??由ъ뒪??珥덇린??  initEventListeners() {
+    // E ?ㅻ? ?뚮??????몄쭛 紐⑤뱶 ?좉?
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "e" || e.key === "E") {
+        if (this.game.isVillageMode) {
+          this.toggleEditMode();
+        }
+      }
+      
+      // S ?ㅻ? ?뚮??????덉씠?꾩썐 ???      if (e.key === "s" || e.key === "S") {
+        if (this.game.isVillageMode && this.game.isEditMode) {
+          this.saveLayout();
+        }
+      }
+      
+      // L ?ㅻ? ?뚮??????덉씠?꾩썐 濡쒕뱶
+      if (e.key === "l" || e.key === "L") {
+        if (this.game.isVillageMode && this.game.isEditMode) {
+          this.loadLayout();
+        }
+      }
+    });
+    
+    // 留덉슦???대깽??由ъ뒪??    this.canvas.addEventListener("mousedown", this.handleMouseDown.bind(this));
+    this.canvas.addEventListener("mousemove", this.handleMouseMove.bind(this));
+    this.canvas.addEventListener("mouseup", this.handleMouseUp.bind(this));
+    
+    // ?고겢由??대깽??泥섎━ (湲곕낯 而⑦뀓?ㅽ듃 硫붾돱 諛⑹?)
+    this.canvas.addEventListener("contextmenu", (e) => {
+      if (this.game.isEditMode && this.game.isVillageMode) {
+        e.preventDefault();
+      }
+    });
+    
+    // ?곗튂 ?대깽??由ъ뒪??(紐⑤컮??
+    this.canvas.addEventListener("touchstart", this.handleTouchStart.bind(this), { passive: false });
+    this.canvas.addEventListener("touchmove", this.handleTouchMove.bind(this), { passive: false });
+    this.canvas.addEventListener("touchend", this.handleTouchEnd.bind(this));
+  }
+  
+  // ?몄쭛 紐⑤뱶 ?좉?
+  toggleEditMode() {
+    this.game.isEditMode = !this.game.isEditMode;
+    
+    if (this.game.isEditMode) {
+      console.log('?몄쭛 紐⑤뱶媛 ?쒖꽦?붾릺?덉뒿?덈떎:');
+      console.log('- 嫄대Ъ???쒕옒洹명븯???대룞?????덉뒿?덈떎.');
+      console.log('- 嫄대Ъ???고겢由?븯??異⑸룎 ?곸뿭??議곗젙?????덉뒿?덈떎.');
+      console.log('- ?뚰봽 ?ъ씤?몃? ?쒕옒洹명븯???대룞?????덉뒿?덈떎.');
+      console.log('- ?몄쭛 ??E瑜??뚮윭 蹂寃쎌궗??쓣 ??ν븯怨??몄쭛 紐⑤뱶瑜?醫낅즺?⑸땲??');
+      
+      // 湲곕낯 異⑸룎 ?щ갚 ?ㅼ젙
+      this.collisionMargin = 10;
+    } else {
+      console.log('?몄쭛 紐⑤뱶媛 鍮꾪솢?깊솕?섏뿀?듬땲?? 蹂寃쎌궗??씠 ??λ릺?덉뒿?덈떎.');
+      this.saveLayout();
+      
+      // ?몄쭛 愿???곹깭 珥덇린??      this.isDragging = false;
+      this.isWarpPointDragging = false;
+      this.isBuilidngDragging = false;
+      this.draggedBuilding = null;
+      this.draggedWarpPoint = false;
+      this.selectedBuilding = null;
+      this.isAdjustingCollision = false;
+      this.isEditingPolygon = false;
+      this.selectedVertex = null;
+    }
+  }
+  
+  // 諛곗튂 ??ν븯湲?  saveLayout() {
+    // 嫄대Ъ 諛??뚰봽 ?ъ씤???꾩튂 ?뺣낫
+    const layoutData = {
+      buildings: this.buildings.map(building => {
+        const buildingData = {
+          name: building.name,
+          x: building.x / this.canvas.width,
+          y: building.y / this.canvas.height
+        };
+        
+        // ?ㅺ컖???덊듃諛뺤뒪媛 ?덈뒗 寃쎌슦 ???        if (building.hitbox && building.hitbox.length >= 3) {
+          buildingData.hitbox = building.hitbox.map(vertex => ({
+            x: (vertex.x - building.x) / building.width, // ?곷? 醫뚰몴濡?蹂??            y: (vertex.y - building.y) / building.height
+          }));
+        }
+        
+        return buildingData;
+      }),
+      warpPoint: {
+        x: this.warpPoint.x / this.canvas.width,
+        y: this.warpPoint.y / this.canvas.height
+      }
+    };
+    
+    // 濡쒖뺄 ?ㅽ넗由ъ??????    localStorage.setItem('villageLayout', JSON.stringify(layoutData));
+    console.log('留덉쓣 ?덉씠?꾩썐????λ릺?덉뒿?덈떎.');
+  }
+  
+  // 諛곗튂 遺덈윭?ㅺ린
+  loadLayout() {
+    const savedLayout = localStorage.getItem('villageLayout');
+    if (savedLayout) {
+      try {
+        const layoutData = JSON.parse(savedLayout);
+        
+        // 嫄대Ъ ?꾩튂 ?낅뜲?댄듃
+        layoutData.buildings.forEach((savedBuilding, index) => {
+          if (index < this.buildings.length) {
+            const building = this.buildings[index];
+            building.x = savedBuilding.x * this.canvas.width;
+            building.y = savedBuilding.y * this.canvas.height;
+            
+            // ?ㅺ컖???덊듃諛뺤뒪媛 ?덈뒗 寃쎌슦 ?곸슜
+            if (savedBuilding.hitbox && savedBuilding.hitbox.length >= 3) {
+              building.hitbox = savedBuilding.hitbox.map(vertex => ({
+                x: building.x + vertex.x * building.width, // ?덈? 醫뚰몴濡?蹂??                y: building.y + vertex.y * building.height
+              }));
+            }
+          }
+        });
+        
+        // ?뚰봽 ?ъ씤???꾩튂 ?낅뜲?댄듃
+        if (layoutData.warpPoint) {
+          this.warpPoint.x = layoutData.warpPoint.x * this.canvas.width;
+          this.warpPoint.y = layoutData.warpPoint.y * this.canvas.height;
+        }
+        
+        console.log('留덉쓣 ?덉씠?꾩썐??遺덈윭?붿뒿?덈떎.');
+      } catch (error) {
+        console.error('?덉씠?꾩썐 遺덈윭?ㅺ린 ?ㅻ쪟:', error);
+      }
+    }
+  }
+  
+  // 嫄대Ъ ?대?吏 濡쒕뱶 ?⑥닔 ?섏젙
+  loadBuildingImages() {
+    const buildingData = [
+      { 
+        name: "?섎즺??, 
+        path: "assets/Medic Shopp.png", 
+        width: 192 * 0.7, // 30% 異뺤냼
+        height: 192 * 0.7, // 30% 異뺤냼
+        // ?덊듃諛뺤뒪 (?곷?醫뚰몴) - ???볤쾶 議곗젙
+        hitboxTemplate: [
+          {x: 0.5, y: 0.0},   // ?곷떒 媛????          {x: 1.0, y: 0.5},   // ?곗륫 媛???ㅻⅨ履?          {x: 0.5, y: 1.0},   // ?섎떒 媛???꾨옒
+          {x: 0.0, y: 0.5}    // 醫뚯륫 媛???쇱そ
+        ]
+      },
+      { 
+        name: "?덉뒪?좊옉", 
+        path: "assets/Resturant.png", 
+        width: 192 * 0.7, // 30% 異뺤냼
+        height: 192 * 0.7, // 30% 異뺤냼
+        hitboxTemplate: [
+          {x: 0.5, y: 0.0},
+          {x: 1.0, y: 0.5},
+          {x: 0.5, y: 1.0},
+          {x: 0.0, y: 0.5}
+        ]
+      },
+      { 
+        name: "珥앺룷??, 
+        path: "assets/Gun Shop.png", 
+        width: 192 * 0.7, // 30% 異뺤냼
+        height: 192 * 0.7, // 30% 異뺤냼
+        hitboxTemplate: [
+          {x: 0.5, y: 0.0},
+          {x: 1.0, y: 0.5},
+          {x: 0.5, y: 1.0},
+          {x: 0.0, y: 0.5}
+        ]
+      },
+      { 
+        name: "李쎄퀬", 
+        path: "assets/Shed.png", 
+        width: 192 * 0.7, // 30% 異뺤냼
+        height: 192 * 0.7, // 30% 異뺤냼
+        hitboxTemplate: [
+          {x: 0.5, y: 0.0},
+          {x: 1.0, y: 0.5},
+          {x: 0.5, y: 1.0},
+          {x: 0.0, y: 0.5}
+        ]
+      }
+    ];
+    
+    // 湲곕낯 ?덉씠?꾩썐 ?곗씠???뺤쓽
+    const defaultLayout = {
+      "buildings": [
+        {
+          "name": "?섎즺??,
+          "x": 0.38666666666666666,
+          "y": 0.18125000000000002
+        },
+        {
+          "name": "?덉뒪?좊옉",
+          "x": 0.4875,
+          "y": 0.25000000000000006
+        },
+        {
+          "name": "珥앺룷??,
+          "x": 0.5958333333333332,
+          "y": 0.29
+        },
+        {
+          "name": "李쎄퀬",
+          "x": 0.31666666666666665,
+          "y": 0.41
+        }
+      ],
+      "warpPoint": {
+        "x": 0.8125,
+        "y": 0.72625
+      }
+    };
+    
+    // ??λ맂 ?덉씠?꾩썐???놁쑝硫?湲곕낯 ?덉씠?꾩썐 ?ъ슜
+    if (!this.layoutData) {
+      this.layoutData = defaultLayout;
+    }
+    
+    // ?꾩뿉???뺤쓽??嫄대Ъ ?곗씠?곕? 湲곕컲?쇰줈 ?대?吏 濡쒕뱶 諛?嫄대Ъ 珥덇린??    this.buildings = [];
+    
+    // 媛?嫄대Ъ ?곗씠?곗뿉 ????대?吏 濡쒕뱶 諛?嫄대Ъ 媛앹껜 ?앹꽦
+    buildingData.forEach(data => {
+      const img = new Image();
+      img.src = data.path;
+      
+      // ?대?吏 濡쒕뱶 ?먮윭 泥섎━ 異붽?
+      img.onerror = () => {
+        console.error(`${data.name} ?대?吏 濡쒕뱶 ?ㅽ뙣: ${data.path}`);
+        // ?대?吏 濡쒕뱶 ?ㅽ뙣 ???泥??대?吏 ?먮뒗 ?됱긽 ?ъ슜
+        const canvas = document.createElement('canvas');
+        canvas.width = data.width;
+        canvas.height = data.height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#808080'; // ?뚯깋?쇰줈 ?泥?        ctx.fillRect(0, 0, data.width, data.height);
+        
+        // ?대쫫 ?쒖떆
+        ctx.fillStyle = 'white';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(data.name, data.width/2, data.height/2);
+        
+        const tempImg = new Image();
+        tempImg.src = canvas.toDataURL();
+        building.image = tempImg;
+      };
+      
+      const building = {
+        name: data.name,
+        image: img,
+        width: data.width,
+        height: data.height,
+        x: 0,
+        y: 0,
+        hitboxTemplate: data.hitboxTemplate // ?곷? 醫뚰몴 ?쒗뵆由????      };
+      
+      // ?대?吏媛 濡쒕뱶?섎㈃ ?덊듃諛뺤뒪 ?앹꽦
+      img.onload = () => {
+        console.log(`${data.name} ?대?吏 濡쒕뱶 ?꾨즺`);
+      };
+      
+      this.buildings.push(building);
+    });
+    
+    // 湲곕낯 ?덉씠?꾩썐 ?곗씠?곌? ?덈뒗 寃쎌슦 ?곸슜
+    if (this.layoutData && this.layoutData.buildings) {
+      this.layoutData.buildings.forEach((buildingData, index) => {
+        if (index < this.buildings.length) {
+          const building = this.buildings[index];
+          building.x = buildingData.x * this.canvas.width;
+          building.y = buildingData.y * this.canvas.height;
+          
+          // ?덈? 醫뚰몴濡??덊듃諛뺤뒪 ?앹꽦 (?ш린 利앷?)
+          if (building.hitboxTemplate) {
+            // ?덊듃諛뺤뒪 ?ш린瑜?30% ?뺤옣 (嫄대Ъ ?ш린??1.3諛?
+            const scale = 1.7; // 70%濡??뺤옣?섏뿬 ?????덊듃諛뺤뒪 ?앹꽦
+            const centerX = building.x + building.width / 2;
+            const centerY = building.y + building.height / 2;
+            
+            building.hitbox = building.hitboxTemplate.map(point => {
+              // 以묒떖??湲곗??쇰줈 ?뺤옣???덊듃諛뺤뒪 ?앹꽦
+              const relX = point.x * building.width;
+              const relY = point.y * building.height;
+              
+              // 以묒떖?먯꽌 ?곷???嫄곕━瑜?怨꾩궛
+              const offsetX = relX - building.width / 2;
+              const offsetY = relY - building.height / 2;
+              
+              // ?뺤옣??嫄곕━ 怨꾩궛
+              const scaledOffsetX = offsetX * scale;
+              const scaledOffsetY = offsetY * scale;
+              
+              // 理쒖쥌 ?덈? 醫뚰몴 怨꾩궛
+              return {
+                x: Math.floor(centerX + scaledOffsetX),
+                y: Math.floor(centerY + scaledOffsetY)
+              };
+            });
+          }
+        }
+      });
+    }
+    
+    // ?뚰봽 ?ъ씤???ㅼ젙
+    this.warpPoint = {
+      x: this.layoutData.warpPoint.x * this.canvas.width,
+      y: this.layoutData.warpPoint.y * this.canvas.height,
+      radius: 40,
+      interactionDistance: 60,
+      active: false,
+      glowIntensity: 0,
+      lastGlowUpdate: 0,
+      glowDirection: 1
+    };
+    
+    // ??λ맂 諛곗튂 遺덈윭?ㅺ린
+    this.loadLayout();
+  }
+  
+  // 留덉슦???대깽???몃뱾???섏젙 - ?ㅺ컖???몄쭛怨?湲곗〈 肄붾뱶瑜??듯빀
+  handleMouseDown(e) {
+    if (!this.game.isEditMode || !this.game.isVillageMode) return;
+    
+    const rect = this.canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // ?뚰봽 ?ъ씤?몄????곹샇?묒슜 泥댄겕
+    const dx = mouseX - this.warpPoint.x;
+    const dy = mouseY - this.warpPoint.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // ?대? ?ㅺ컖???몄쭛 紐⑤뱶?몄? ?뺤씤
+    if (this.isEditingPolygon && this.selectedBuilding && this.selectedBuilding.hitbox) {
+      // ?ㅺ컖???뺤젏 ?좏깮 ?뺤씤
+      for (let i = 0; i < this.selectedBuilding.hitbox.length; i++) {
+        const vertex = this.selectedBuilding.hitbox[i];
+        const dx = mouseX - vertex.x;
+        const dy = mouseY - vertex.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance <= 10) {
+          this.selectedVertex = i;
+          console.log(`?뺤젏 ${i} ?좏깮??);
+          return;
+        }
+      }
+      
+      // ?뺤젏???좏깮?섏? ?딆븯?쇰㈃ ?몄쭛 紐⑤뱶 醫낅즺
+      this.isEditingPolygon = false;
+      this.selectedVertex = null;
+      console.log("?ㅺ컖???몄쭛 紐⑤뱶 醫낅즺");
+      return;
+    }
+    
+    // ?대? 嫄대Ъ 異⑸룎 ?곸뿭 議곗젙 紐⑤뱶?몄? ?뺤씤
+    if (this.selectedBuilding && this.isAdjustingCollision) {
+      const margin = this.collisionMargin;
+      const building = this.selectedBuilding;
+      
+      // 異⑸룎 ?곸뿭??媛?紐⑥꽌由??꾩튂
+      const corners = {
+        tl: { x: building.x + margin, y: building.y + margin },
+        tr: { x: building.x + building.width - margin, y: building.y + margin },
+        bl: { x: building.x + margin, y: building.y + building.height - margin },
+        br: { x: building.x + building.width - margin, y: building.y + building.height - margin }
+      };
+      
+      // 媛?紐⑥꽌由ъ???嫄곕━ ?뺤씤
+      for (const corner in corners) {
+        const cdx = mouseX - corners[corner].x;
+        const cdy = mouseY - corners[corner].y;
+        const cornerDistance = Math.sqrt(cdx * cdx + cdy * cdy);
+        
+        if (cornerDistance < 20) { // 紐⑥꽌由?媛먯? 踰붿쐞
+          this.adjustingCorner = corner;
+          return;
+        }
+      }
+      
+      // 紐⑥꽌由щ? ?대┃?섏? ?딆븯?ㅻ㈃ 議곗젙 紐⑤뱶 醫낅즺
+      this.isAdjustingCollision = false;
+      this.adjustingCorner = null;
+      console.log(`嫄대Ъ ${this.selectedBuilding.name}??異⑸룎 ?щ갚: ${this.collisionMargin}px`);
+      return;
+    }
+    
+    if (distance <= this.warpPoint.radius) {
+      this.isDragging = true;
+      this.draggedWarpPoint = true;
+      this.draggedBuilding = null;
+      this.isWarpPointDragging = true;
+      return;
+    }
+    
+    // 嫄대Ъ怨쇱쓽 ?곹샇?묒슜 泥댄겕 (?ㅼ뿉?쒕????뺤씤?섏뿬 ?꾩뿉 ?덈뒗 嫄대Ъ ?곗꽑)
+    for (let i = this.buildings.length - 1; i >= 0; i--) {
+      const building = this.buildings[i];
+      if (this.isPointInBuilding(mouseX, mouseY, building)) {
+        // ?고겢由???異⑸룎 踰붿쐞 議곗젙 紐⑤뱶 ?쒖꽦??        if (e.button === 2) {
+          e.preventDefault();
+          this.selectedBuilding = building;
+          
+          // ?대? ?ㅺ컖?뺤씠 ?덉쑝硫??ㅺ컖???몄쭛 紐⑤뱶, ?놁쑝硫??쇰컲 留덉쭊 議곗젙 紐⑤뱶
+          if (building.hitbox && building.hitbox.length >= 3) {
+            this.isEditingPolygon = true;
+            this.isAdjustingCollision = false;
+            console.log(`嫄대Ъ ${building.name}???ㅺ컖???몄쭛 紐⑤뱶 ?쒖꽦??);
+          } else {
+            this.isAdjustingCollision = true;
+            this.isEditingPolygon = false;
+            console.log(`嫄대Ъ ${building.name}??異⑸룎 踰붿쐞 議곗젙 紐⑤뱶 ?쒖꽦?? ?꾩옱 ?щ갚: ${this.collisionMargin}px`);
+          }
+          
+          this.isDragging = false;
+          this.isBuilidngDragging = false;
+          return;
+        }
+        
+        this.isDragging = true;
+        this.draggedBuilding = building;
+        this.draggedWarpPoint = false;
+        this.isBuilidngDragging = true;
+        this.dragOffsetX = mouseX - building.x;
+        this.dragOffsetY = mouseY - building.y;
+        
+        // 嫄대Ъ ?대룞 ???꾩튂 ???(?덊듃諛뺤뒪 ?낅뜲?댄듃??
+        building.prevX = building.x;
+        building.prevY = building.y;
+        
+        console.log(`嫄대Ъ ?좏깮?? ${building.name}`);
+        return;
+      }
+    }
+    
+    this.selectedBuilding = null;
+    this.isAdjustingCollision = false;
+    this.isEditingPolygon = false;
+    this.isDragging = false;
+    this.draggedBuilding = null;
+    this.draggedWarpPoint = false;
+  }
+  
+  // 留덉슦???대룞 ?몃뱾???섏젙 - ?ㅺ컖???몄쭛怨?湲곗〈 肄붾뱶 ?듯빀
+  handleMouseMove(e) {
+    if (!this.game.isEditMode || !this.game.isVillageMode) return;
+    
+    const rect = this.canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // ?ㅺ컖???뺤젏 ?대룞
+    if (this.isEditingPolygon && this.selectedBuilding && this.selectedVertex !== null) {
+      // ?좏깮???뺤젏 ?대룞
+      this.selectedBuilding.hitbox[this.selectedVertex] = {
+        x: mouseX,
+        y: mouseY
+      };
+      return;
+    }
+    
+    // 異⑸룎 踰붿쐞 議곗젙 以묒씤 寃쎌슦
+    if (this.isAdjustingCollision && this.selectedBuilding && this.adjustingCorner) {
+      const building = this.selectedBuilding;
+      
+      // 留덉슦???꾩튂???곕씪 留덉쭊 議곗젙
+      switch (this.adjustingCorner) {
+        case 'tl': // ?쇱そ ??紐⑥꽌由?          this.collisionMargin = Math.min(
+            Math.max(mouseX - building.x, 0),
+            Math.max(mouseY - building.y, 0),
+            Math.min(building.width / 2, building.height / 2)
+          );
+          break;
+        case 'tr': // ?ㅻⅨ履???紐⑥꽌由?          this.collisionMargin = Math.min(
+            Math.max(building.x + building.width - mouseX, 0),
+            Math.max(mouseY - building.y, 0),
+            Math.min(building.width / 2, building.height / 2)
+          );
+          break;
+        case 'bl': // ?쇱そ ?꾨옒 紐⑥꽌由?          this.collisionMargin = Math.min(
+            Math.max(mouseX - building.x, 0),
+            Math.max(building.y + building.height - mouseY, 0),
+            Math.min(building.width / 2, building.height / 2)
+          );
+          break;
+        case 'br': // ?ㅻⅨ履??꾨옒 紐⑥꽌由?          this.collisionMargin = Math.min(
+            Math.max(building.x + building.width - mouseX, 0),
+            Math.max(building.y + building.height - mouseY, 0),
+            Math.min(building.width / 2, building.height / 2)
+          );
+          break;
+      }
+      
+      // 留덉쭊 媛믪쓣 ?뺤닔濡?諛섏삱由?      this.collisionMargin = Math.round(this.collisionMargin);
+      return;
+    }
+    
+    // 湲곗〈 ?쒕옒洹?濡쒖쭅
+    if (this.isDragging) {
+      if (this.draggedWarpPoint) {
+        // ?뚰봽 ?ъ씤???대룞
+        this.warpPoint.x = mouseX;
+        this.warpPoint.y = mouseY;
+        
+        // ?붾㈃ 寃쎄퀎 泥댄겕
+        this.warpPoint.x = Math.max(0, Math.min(this.warpPoint.x, this.canvas.width));
+        this.warpPoint.y = Math.max(0, Math.min(this.warpPoint.y, this.canvas.height));
+      } else if (this.draggedBuilding) {
+        // ?댁쟾 ?꾩튂 ???        const prevX = this.draggedBuilding.x;
+        const prevY = this.draggedBuilding.y;
+        
+        // 嫄대Ъ ?대룞
+        this.draggedBuilding.x = mouseX - this.dragOffsetX;
+        this.draggedBuilding.y = mouseY - this.dragOffsetY;
+        
+        // ?붾㈃ 寃쎄퀎 泥댄겕
+        this.draggedBuilding.x = Math.max(0, Math.min(this.draggedBuilding.x, this.canvas.width - this.draggedBuilding.width));
+        this.draggedBuilding.y = Math.max(0, Math.min(this.draggedBuilding.y, this.canvas.height - this.draggedBuilding.height));
+        
+        // 嫄대Ъ???대룞?덉쑝硫??덊듃諛뺤뒪 ?낅뜲?댄듃
+        if (prevX !== this.draggedBuilding.x || prevY !== this.draggedBuilding.y) {
+          // 嫄대Ъ ?꾩튂 蹂寃????덊듃諛뺤뒪 ?낅뜲?댄듃
+          this.onBuildingMoved(this.draggedBuilding);
+        }
+      }
+    }
+  }
+  
+  // 留덉슦?????몃뱾??  handleMouseUp() {
+    // ?몄쭛 紐⑤뱶 泥댄겕
+    if (!this.game.isEditMode || !this.game.isVillageMode) return;
+    
+    // 異⑸룎 ?곸뿭 議곗젙 以묒씠?덈떎硫?    if (this.isAdjustingCollision && this.selectedBuilding && this.adjustingCorner) {
+      console.log(`嫄대Ъ ${this.selectedBuilding.name}??異⑸룎 ?щ갚 ?ㅼ젙: ${this.collisionMargin}px`);
+      this.adjustingCorner = null; // 議곗젙 以묒씤 紐⑥꽌由??댁젣
+    }
+    
+    // ?쒕옒洹??곹깭 珥덇린??    this.isDragging = false;
+    this.isWarpPointDragging = false;
+    this.isBuilidngDragging = false;
+    this.draggedBuilding = null;
+    this.draggedWarpPoint = false;
+  }
+  
+  // ?곗튂 ?대깽???몃뱾??  handleTouchStart(e) {
+    if (!this.game.isEditMode || !this.game.isVillageMode) return;
+    
+    e.preventDefault();
+    const rect = this.canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const touchX = touch.clientX - rect.left;
+    const touchY = touch.clientY - rect.top;
+    
+    // ?뚰봽 ?ъ씤???곗튂 ?뺤씤
+    const dx = touchX - this.warpPoint.x;
+    const dy = touchY - this.warpPoint.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance <= this.warpPoint.radius) {
+      this.isDragging = true;
+      this.draggedBuilding = null;
+      this.draggedWarpPoint = true;
+      this.dragOffsetX = dx;
+      this.dragOffsetY = dy;
+      return;
+    }
+    
+    // 嫄대Ъ ?곗튂 ?뺤씤
+    for (let i = this.buildings.length - 1; i >= 0; i--) {
+      const building = this.buildings[i];
+      if (this.isPointInBuilding(touchX, touchY, building)) {
+        this.isDragging = true;
+        this.draggedBuilding = building;
+        this.draggedWarpPoint = false;
+        this.dragOffsetX = touchX - building.x;
+        this.dragOffsetY = touchY - building.y;
+        break;
+      }
+    }
+  }
+  
+  // ?곗튂 ?대룞 ?몃뱾??  handleTouchMove(e) {
+    if (!this.isDragging) return;
+    
+    e.preventDefault();
+    const rect = this.canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const touchX = touch.clientX - rect.left;
+    const touchY = touch.clientY - rect.top;
+    
+    if (this.draggedWarpPoint) {
+      // ?댁쟾 ?꾩튂 ???      const prevX = this.warpPoint.x;
+      const prevY = this.warpPoint.y;
+      
+      // ?뚰봽 ?ъ씤???꾩튂 ?낅뜲?댄듃
+      this.warpPoint.x = touchX - this.dragOffsetX;
+      this.warpPoint.y = touchY - this.dragOffsetY;
+      
+      // 罹붾쾭??寃쎄퀎 ?덉뿉 ?좎?
+      this.warpPoint.x = Math.max(this.warpPoint.radius, Math.min(this.canvas.width - this.warpPoint.radius, this.warpPoint.x));
+      this.warpPoint.y = Math.max(this.warpPoint.radius, Math.min(this.canvas.height - this.warpPoint.radius, this.warpPoint.y));
+    } else if (this.draggedBuilding) {
+      // 嫄대Ъ ?꾩튂 ?낅뜲?댄듃
+      this.draggedBuilding.x = touchX - this.dragOffsetX;
+      this.draggedBuilding.y = touchY - this.dragOffsetY;
+      
+      // 罹붾쾭??寃쎄퀎 ?덉뿉 ?좎?
+      this.draggedBuilding.x = Math.max(0, Math.min(this.canvas.width - this.draggedBuilding.width, this.draggedBuilding.x));
+      this.draggedBuilding.y = Math.max(0, Math.min(this.canvas.height - this.draggedBuilding.height, this.draggedBuilding.y));
+    }
+  }
+  
+  // ?곗튂 醫낅즺 ?몃뱾??  handleTouchEnd() {
+    this.isDragging = false;
+    this.draggedBuilding = null;
+    this.draggedWarpPoint = false;
+  }
+  
+  // ?먯씠 嫄대Ъ ?대????덈뒗吏 ?뺤씤 (35???뚯쟾???덊듃諛뺤뒪)
+  isPointInBuilding(x, y, building) {
+    // ?덊듃諛뺤뒪媛 ?덉쑝硫??ㅺ컖??異⑸룎 ?뺤씤
+    if (building.hitbox && building.hitbox.length >= 3) {
+      return this.isPointInPolygon(x, y, building.hitbox);
+    }
+    
+    // ?덊듃諛뺤뒪媛 ?녿뒗 寃쎌슦 - 嫄대Ъ ?꾩껜 ?곸뿭??異⑸룎 ?곸뿭?쇰줈 媛꾩＜
+    return x >= building.x && 
+           x <= building.x + building.width && 
+           y >= building.y && 
+           y <= building.y + building.height;
+  }
+  
+  // ?먯씠 ?ㅺ컖???대????덈뒗吏 ?뺤씤?섎뒗 ?⑥닔
+  isPointInPolygon(x, y, polygon) {
+    let inside = false;
+    
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i].x;
+      const yi = polygon[i].y;
+      const xj = polygon[j].x;
+      const yj = polygon[j].y;
+      
+      const intersect = ((yi > y) !== (yj > y)) && 
+        (x < (xj - xi) * (y - yi) / (yj - yi) + xi));
+        
+      if (intersect) inside = !inside;
+    }
+    
+    return inside;
+  }
+  
+  // 嫄대Ъ 洹몃━湲??⑥닔 ?섏젙 - 35???뚯쟾???덊듃諛뺤뒪 ?쒖떆
+  drawBuilding(building) {
+    // 嫄대Ъ ?대?吏媛 濡쒕뱶?섏뿀?붿? ?뺤씤
+    if (building.image && building.image.complete) {
+      // 嫄대Ъ ?대?吏 洹몃━湲?      this.ctx.drawImage(
+        building.image,
+        building.x,
+        building.y,
+        building.width,
+        building.height
+      );
+      
+      // ?몄쭛 紐⑤뱶???뚮쭔 異붽? ?쒖떆
+      if (this.game.isEditMode) {
+        // ?쒕옒洹?以묒씤 嫄대Ъ? 媛뺤“ ?쒖떆
+        if (this.draggedBuilding === building) {
+          this.ctx.fillStyle = 'rgba(255, 80, 80, 0.3)';
+          this.ctx.fillRect(
+            building.x,
+            building.y,
+            building.width,
+            building.height
+          );
+          
+          this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+          this.ctx.lineWidth = 3;
+        } else {
+          this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+          this.ctx.lineWidth = 2;
+        }
+        
+        this.ctx.strokeRect(
+          building.x,
+          building.y,
+          building.width,
+          building.height
+        );
+        
+        // 嫄대Ъ ?대쫫 ?쒖떆
+        this.ctx.fillStyle = 'white';
+        this.ctx.font = '16px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(
+          building.name,
+          building.x + building.width / 2,
+          building.y - 10
+        );
+        
+        // ?쒕옒洹??덈궡 ?꾩씠肄?        if (this.draggedBuilding === building) {
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          this.ctx.font = '24px Arial';
+          this.ctx.fillText('??, building.x + building.width / 2, building.y + building.height + 20);
+        }
+        
+        // 異⑸룎 ?곸뿭 ?쒓컖??(35???뚯쟾 留덈쫫紐④섦)
+        if (building.hitbox && building.hitbox.length >= 3) {
+          this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+          this.ctx.lineWidth = 2;
+          
+          // ?ㅺ컖??洹몃━湲?          this.ctx.beginPath();
+          this.ctx.moveTo(building.hitbox[0].x, building.hitbox[0].y);
+          for (let i = 1; i < building.hitbox.length; i++) {
+            this.ctx.lineTo(building.hitbox[i].x, building.hitbox[i].y);
+          }
+          this.ctx.closePath();
+          this.ctx.stroke();
+          
+          // ?ㅺ컖???뺤젏 ?쒖떆
+          if (this.selectedBuilding === building && this.isEditingPolygon) {
+            this.ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+            building.hitbox.forEach((vertex, index) => {
+              this.ctx.beginPath();
+              this.ctx.arc(vertex.x, vertex.y, 8, 0, Math.PI * 2);
+              this.ctx.fill();
+              
+              // ?뺤젏 踰덊샇 ?쒖떆
+              this.ctx.fillStyle = 'black';
+              this.ctx.font = '10px Arial';
+              this.ctx.textAlign = 'center';
+              this.ctx.fillText(index.toString(), vertex.x, vertex.y + 3);
+              this.ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+            });
+          }
+        } else {
+          // 留덈쫫紐?洹몃━湲?(???볦? ?덊듃諛뺤뒪)
+          const centerX = building.x + building.width / 2;
+          const centerY = building.y + building.height / 2;
+          const size = Math.min(building.width, building.height) * 0.95; // ?덊듃諛뺤뒪 ?ш린 利앷? (0.9 -> 0.95)
+          
+          this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+          this.ctx.lineWidth = 2;
+          this.ctx.beginPath();
+          this.ctx.moveTo(centerX, centerY - size * 0.95); // ?곷떒
+          this.ctx.lineTo(centerX + size * 0.95, centerY); // ?곗륫
+          this.ctx.lineTo(centerX, centerY + size * 0.95); // ?섎떒
+          this.ctx.lineTo(centerX - size * 0.95, centerY); // 醫뚯륫
+          this.ctx.closePath();
+          this.ctx.stroke();
+        }
+        
+        // 異⑸룎 ?곸뿭 議곗젙 紐⑤뱶??寃쎌슦 異붽? UI
+        if (this.selectedBuilding === building && this.isAdjustingCollision) {
+          // 議곗젙???쒖떆
+          const centerX = building.x + building.width / 2;
+          const centerY = building.y + building.height / 2;
+          const size = Math.min(building.width, building.height) * 0.95; // ?덊듃諛뺤뒪 ?ш린 利앷? (0.9 -> 0.95)
+          
+          const points = [
+            { name: 'top', x: centerX, y: centerY - size },
+            { name: 'right', x: centerX + size, y: centerY },
+            { name: 'bottom', x: centerX, y: centerY + size },
+            { name: 'left', x: centerX - size, y: centerY }
+          ];
+          
+          this.ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+          for (const point of points) {
+            this.ctx.beginPath();
+            this.ctx.arc(point.x, point.y, 10, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+          
+          // 留덉쭊 媛??쒖떆
+          this.ctx.fillStyle = 'white';
+          this.ctx.font = '14px Arial';
+          this.ctx.textAlign = 'center';
+          this.ctx.fillText(
+            `?ш린: ${Math.round(size)}px`,
+            centerX,
+            centerY
+          );
+        }
+      }
+    }
+  }
+  
+  // ?몄쭛 紐⑤뱶 UI 洹몃━湲?  drawEditModeUI() {
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.fillRect(10, 10, 250, 30);
+    
+    this.ctx.fillStyle = 'white';
+    this.ctx.font = '16px Arial';
+    this.ctx.textAlign = 'left';
+    this.ctx.fillText('?몄쭛 紐⑤뱶: M?ㅻ줈 ?좉?, S?ㅻ줈 ???, 20, 30);
+    
+    // ????꾨즺 硫붿떆吏
+    if (this.saveMessageVisible) {
+      const alpha = Math.min(1, Math.max(0, 1 - (Date.now() - this.saveMessageTimer) / 3000));
+      
+      this.ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.7})`;
+      this.ctx.fillRect(this.canvas.width / 2 - 100, 50, 200, 40);
+      
+      this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      this.ctx.font = '18px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('留덉쓣 諛곗튂 ????꾨즺!', this.canvas.width / 2, 75);
+    }
+  }
+  
+  // ?뚰봽 ?ъ씤??洹몃━湲?  drawWarpPoint() {
+    // ?뚰봽 ?ъ씤?멸? ?뺤쓽?섏? ?딆? 寃쎌슦 由ы꽩
+    if (!this.warpPoint) {
+      console.warn("?뚰봽 ?ъ씤?멸? ?뺤쓽?섏? ?딆븯?듬땲??");
+      return;
+    }
+    
+    // player 媛앹껜媛 ?덈뒗 寃쎌슦?먮쭔 ?곹샇?묒슜 ?뺤씤
+    if (this.game && this.game.player) {
+      // ?뚮젅?댁뼱? ?뚰봽 ?ъ씤??嫄곕━ 怨꾩궛
+      const player = this.game.player;
+      const dx = player.x - this.warpPoint.x;
+      const dy = player.y - this.warpPoint.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // ?곹샇?묒슜 媛??嫄곕━ ?댁뿉 ?덉쑝硫??뚰봽 ?ъ씤???쒖꽦??      this.warpPoint.active = distance <= this.warpPoint.interactionDistance;
+    }
+    
+    // 諛쒓킅 ?④낵 ?낅뜲?댄듃
+    const now = Date.now();
+    if (now - this.warpPoint.lastGlowUpdate > 50) {
+      this.warpPoint.lastGlowUpdate = now;
+      
+      // 諛쒓킅 媛뺣룄 ?낅뜲?댄듃 (0.3 ~ 0.8 ?ъ씠?먯꽌 蹂??
+      this.warpPoint.glowIntensity += 0.03 * this.warpPoint.glowDirection;
+      if (this.warpPoint.glowIntensity >= 0.8) {
+        this.warpPoint.glowIntensity = 0.8;
+        this.warpPoint.glowDirection = -1;
+      } else if (this.warpPoint.glowIntensity <= 0.3) {
+        this.warpPoint.glowIntensity = 0.3;
+        this.warpPoint.glowDirection = 1;
+      }
+    }
+    
+    // ?뚰봽 ?ъ씤??洹몃━湲?    const gradient = this.ctx.createRadialGradient(
+      this.warpPoint.x, this.warpPoint.y, 
+      this.warpPoint.radius * 0.3,
+      this.warpPoint.x, this.warpPoint.y, 
+      this.warpPoint.radius
+    );
+    
+    // ?쒕옒洹?以묒씠硫??됱긽 蹂寃?    if (this.draggedWarpPoint) {
+      gradient.addColorStop(0, `rgba(255, 150, 50, ${this.warpPoint.glowIntensity * 1.2})`);
+      gradient.addColorStop(0.7, `rgba(200, 100, 50, ${this.warpPoint.glowIntensity * 0.8})`);
+      gradient.addColorStop(1, `rgba(150, 50, 0, 0)`);
+    } else {
+      gradient.addColorStop(0, `rgba(80, 200, 255, ${this.warpPoint.glowIntensity})`);
+      gradient.addColorStop(0.7, `rgba(30, 100, 255, ${this.warpPoint.glowIntensity * 0.7})`);
+      gradient.addColorStop(1, `rgba(10, 50, 200, 0)`);
+    }
+    
+    this.ctx.beginPath();
+    this.ctx.arc(
+      this.warpPoint.x, 
+      this.warpPoint.y, 
+      this.warpPoint.radius, 
+      0, 
+      Math.PI * 2
+    );
+    this.ctx.fillStyle = gradient;
+    this.ctx.fill();
+    
+    // ?뚰봽 ?ъ씤???뚮몢由?    this.ctx.beginPath();
+    this.ctx.arc(
+      this.warpPoint.x, 
+      this.warpPoint.y, 
+      this.warpPoint.radius, 
+      0, 
+      Math.PI * 2
+    );
+    
+    if (this.draggedWarpPoint) {
+      this.ctx.strokeStyle = `rgba(255, 150, 0, ${this.warpPoint.glowIntensity * 0.9})`;
+      this.ctx.lineWidth = 3;
+    } else {
+      this.ctx.strokeStyle = `rgba(100, 200, 255, ${this.warpPoint.glowIntensity * 0.8})`;
+      this.ctx.lineWidth = 2;
+    }
+    
+    this.ctx.stroke();
+    
+    // ?몄쭛 紐⑤뱶?????뚰봽 ?ъ씤?몃룄 ?쒕옒洹?媛?ν븯寃??쒖떆
+    if (this.game.isEditMode && this.game.isVillageMode) {
+      this.ctx.strokeStyle = this.draggedWarpPoint ? 
+        'rgba(255, 150, 0, 0.9)' : 
+        'rgba(255, 255, 0, 0.8)';
+      this.ctx.lineWidth = this.draggedWarpPoint ? 4 : 3;
+      this.ctx.beginPath();
+      this.ctx.arc(
+        this.warpPoint.x, 
+        this.warpPoint.y, 
+        this.warpPoint.radius + 5, 
+        0, 
+        Math.PI * 2
+      );
+      this.ctx.stroke();
+      
+      // ?뚰봽 ?ъ씤???쇰꺼
+      this.ctx.fillStyle = 'white';
+      this.ctx.font = '16px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(
+        '?뚰봽 ?ъ씤??,
+        this.warpPoint.x,
+        this.warpPoint.y - this.warpPoint.radius - 15
+      );
+      
+      // ?쒕옒洹?以묒씪 ??異붽? ?쒖떆
+      if (this.draggedWarpPoint) {
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        this.ctx.font = '24px Arial';
+        this.ctx.fillText('??, this.warpPoint.x, this.warpPoint.y + this.warpPoint.radius + 25);
+      }
+    }
+  }
+  
+  // ?곹샇?묒슜 ?덈궡 硫붿떆吏 ?쒖떆
+  drawInstructions() {
+    if (this.warpPoint.active) {
+      this.ctx.fillStyle = "#ffffff";
+      this.ctx.font = "18px Arial";
+      this.ctx.textAlign = "center";
+      this.ctx.fillText(
+        "E?ㅻ? ?뚮윭 寃뚯엫 ?쒖옉",
+        this.warpPoint.x,
+        this.warpPoint.y - this.warpPoint.radius - 20
+      );
+    }
+    
+    // ?몄쭛 紐⑤뱶 ?덈궡 硫붿떆吏
+    if (this.game.isEditMode && this.game.isVillageMode) {
+      this.ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      this.ctx.font = "16px Arial";
+      this.ctx.textAlign = "center";
+      this.ctx.fillText(
+        "嫄대Ъ???쒕옒洹명븯??諛곗튂?????덉뒿?덈떎",
+        this.canvas.width / 2,
+        this.canvas.height - 20
+      );
+    }
+  }
+  
+  // ?뚰봽 ?ъ씤?몄? ?곹샇?묒슜 ?쒕룄
+  tryInteractWithWarpPoint() {
+    if (this.warpPoint.active) {
+      // 寃뚯엫 ?쒖옉 濡쒖쭅 ?몄텧
+      return true;
+    }
+    return false;
+  }
+  
+  // 嫄대Ъ ?대룞 ???덊듃諛뺤뒪 ?낅뜲?댄듃
+  onBuildingMoved(building) {
+    console.log(`嫄대Ъ '${building.name}' ?꾩튂 蹂寃? x=${building.x}, y=${building.y}`);
+    
+    // 嫄대Ъ???덊듃諛뺤뒪媛 ?뺤쓽?섏뼱 ?덉쑝硫??꾩튂??留욊쾶 ?낅뜲?댄듃
+    if (building.hitboxTemplate) {
+      // ?덊듃諛뺤뒪 ?앹꽦 (?덈? 醫뚰몴濡?蹂??
+      building.hitbox = building.hitboxTemplate.map(point => {
+        return {
+          x: Math.floor(building.x + point.x * building.width),
+          y: Math.floor(building.y + point.y * building.height)
+        };
+      });
+    }
+    
+    // 嫄대Ъ ?꾩튂 ???    if (this.game.isEditMode) {
+      this.saveLayout();
+    }
+  }
+  
+  // 留덉쓣 洹몃━湲?  draw() {
+    // 諛곌꼍 洹몃━湲?    this.ctx.fillStyle = this.villageBackground;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    // 嫄대Ъ 洹몃━湲?(?뚮젅?댁뼱蹂대떎 ?ㅼ뿉 ?덈뒗 嫄대Ъ)
+    this.buildings.forEach(building => {
+      if (building.y + building.height < this.game.player.y) {
+        this.drawBuilding(building);
+      }
+    });
+    
+    // ?뚰봽 ?ъ씤??洹몃━湲?    this.drawWarpPoint();
+    
+    // 嫄대Ъ 洹몃━湲?(?뚮젅?댁뼱蹂대떎 ?욎뿉 ?덈뒗 嫄대Ъ)
+    this.buildings.forEach(building => {
+      if (building.y + building.height >= this.game.player.y) {
+        this.drawBuilding(building);
+      }
+    });
+    
+    // ?몄쭛 紐⑤뱶 UI 洹몃━湲?    if (this.game.isEditMode) {
+      this.drawEditModeUI();
+    }
+    
+    // ?뚮젅?댁뼱 異⑸룎 ?곸뿭 ?쒓컖??(留덈쫫紐④섦 ?뺥깭)
+    this.drawPlayerCollisionArea();
+    
+    // 留덉쓣 ?덈궡 硫붿떆吏 洹몃━湲?    this.drawInstructions();
+  }
+  
+  // ?뚮젅?댁뼱 異⑸룎 ?곸뿭 ?쒓컖??(留덈쫫紐④섦 ?뺥깭)
+  drawPlayerCollisionArea() {
+    if (this.game.debugOptions && this.game.debugOptions.showHitboxes) {
+      // ?뚮젅?댁뼱 ?덊듃諛뺤뒪 (以묒븰???꾩튂???묒? 留덈쫫紐?
+      const centerX = this.game.player.x + this.game.player.size / 2;
+      const centerY = this.game.player.y + this.game.player.size / 2;
+      const size = this.game.player.size * 0.9; // ?덊듃諛뺤뒪 ?ш린 利앷? (0.8 -> 0.9)
+      
+      // 留덈쫫紐④섦 ?덊듃諛뺤뒪 洹몃━湲?(???볦? ?덊듃諛뺤뒪)
+      this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.moveTo(centerX, centerY - size * 0.95); // ?곷떒
+      this.ctx.lineTo(centerX + size * 0.95, centerY); // ?곗륫
+      this.ctx.lineTo(centerX, centerY + size * 0.95); // ?섎떒
+      this.ctx.lineTo(centerX - size * 0.95, centerY); // 醫뚯륫
+      this.ctx.closePath();
+      this.ctx.stroke();
+    }
+  }
+  
+  /**
+   * ?뚮젅?댁뼱 ?대룞??泥섎━?섎뒗 ?⑥닔 (?꾩쟾???덈줈 援ы쁽)
+   * @param {Object} player - ?뚮젅?댁뼱 媛앹껜
+   * @param {Object} keys - ?꾩옱 ?뚮┛ ???곹깭
+   */
+  handlePlayerMovement(player, keys) {
+    // ?댁쟾 ?꾩튂 ???(異⑸룎 ??蹂듭썝??
+    const prevX = player.x;
+    const prevY = player.y;
+    
+    // ?대룞 諛⑺뼢 怨꾩궛
+    let dx = 0;
+    let dy = 0;
+    
+    if (keys.ArrowUp || keys.w) dy -= player.speed;
+    if (keys.ArrowDown || keys.s) dy += player.speed;
+    if (keys.ArrowLeft || keys.a) {
+      dx -= player.speed;
+      player.facingLeft = true;
+    }
+    if (keys.ArrowRight || keys.d) {
+      dx += player.speed;
+      player.facingLeft = false;
+    }
+    
+    // ?대룞???놁쑝硫?泥섎━ 以묐떒
+    if (dx === 0 && dy === 0) {
+      player.isMoving = false;
+      return;
+    }
+    
+    // ?덈줈???꾩튂 怨꾩궛
+    const newX = prevX + dx;
+    const newY = prevY + dy;
+    
+    // ?꾩떆濡??꾩튂 ?낅뜲?댄듃
+    player.x = newX;
+    player.y = newY;
+    
+    // 嫄대Ъ怨쇱쓽 異⑸룎 ?뺤씤
+    let collision = false;
+    let collidedBuilding = null;
+    
+    for (const building of this.buildings) {
+      if (this.isPlayerCollidingWithBuilding(player, building)) {
+        collision = true;
+        collidedBuilding = building;
+        break;
+      }
+    }
+    
+    // 異⑸룎 諛쒖깮 ???먮옒 ?꾩튂濡??섎룎由?    if (collision) {
+      console.log(`?뚮젅?댁뼱媛 ${collidedBuilding.name}怨??) 異⑸룎??- ?대룞 痍⑥냼`);
+      player.x = prevX;
+      player.y = prevY;
+      player.isMoving = false;
+    } else {
+      // 異⑸룎???놁쑝硫??붾㈃ 寃쎄퀎 ?뺤씤
+      player.x = Math.max(0, Math.min(player.x, this.canvas.width - player.size));
+      player.y = Math.max(0, Math.min(player.y, this.canvas.height - player.size));
+      player.isMoving = true;
+    }
+    
+    // ?뚰봽 ?ъ씤?몄????곹샇?묒슜 泥댄겕
+    this.warpPoint.active = this.isPlayerCollidingWithWarpPoint(player);
+  }
+  
+  /**
+   * ?뚮젅?댁뼱? 嫄대Ъ??異⑸룎???뺤씤?섎뒗 ?⑥닔
+   * @param {Object} player - ?뚮젅?댁뼱 媛앹껜
+   * @param {Object} building - 嫄대Ъ 媛앹껜
+   * @returns {boolean} 異⑸룎 ?щ?
+   */
+  isPlayerCollidingWithBuilding(player, building) {
+    // 1. 湲곕낯 AABB(Axis-Aligned Bounding Box) 異⑸룎 ?뺤씤 (理쒖쟻??
+    if (!(player.x < building.x + building.width &&
+          player.x + player.size > building.x &&
+          player.y < building.y + building.height &&
+          player.y + player.size > building.y)) {
+      return false;
+    }
+    
+    // 2. 嫄대Ъ???뺤쓽???덊듃諛뺤뒪媛 ?덈뒗 寃쎌슦 ?뺣? 異⑸룎 寃??    if (building.hitbox && building.hitbox.length >= 3) {
+      // ?뚮젅?댁뼱??8媛??뚯뒪???ъ씤???앹꽦 (?뚮몢由?
+      const playerPoints = [];
+      
+      // ?뚮젅?댁뼱 蹂몄껜???뚮몢由??ъ씤??(8媛?
+      const margin = player.size * 0.1; // ?쎄컙???ъ쑀 怨듦컙
+      
+      // ??紐⑥꽌由??ъ씤??      playerPoints.push({x: player.x + margin, y: player.y + margin}); // 醫뚯긽??      playerPoints.push({x: player.x + player.size - margin, y: player.y + margin}); // ?곗긽??      playerPoints.push({x: player.x + player.size - margin, y: player.y + player.size - margin}); // ?고븯??      playerPoints.push({x: player.x + margin, y: player.y + player.size - margin}); // 醫뚰븯??      
+      // ??蹂??以묎컙 ?ъ씤??      playerPoints.push({x: player.x + player.size/2, y: player.y + margin}); // ?곷떒 以묒븰
+      playerPoints.push({x: player.x + player.size - margin, y: player.y + player.size/2}); // ?곗륫 以묒븰
+      playerPoints.push({x: player.x + player.size/2, y: player.y + player.size - margin}); // ?섎떒 以묒븰
+      playerPoints.push({x: player.x + margin, y: player.y + player.size/2}); // 醫뚯륫 以묒븰
+      
+      // 以묒떖 ?ъ씤??      playerPoints.push({x: player.x + player.size/2, y: player.y + player.size/2}); // 以묒븰
+      
+      // 2-1. ?뚮젅?댁뼱???ъ씤?멸? 嫄대Ъ ?대????덈뒗吏 ?뺤씤
+      for (const point of playerPoints) {
+        if (this.isPointInPolygon(point.x, point.y, building.hitbox)) {
+          return true;
+        }
+      }
+      
+      // 2-2. 嫄대Ъ ?덊듃諛뺤뒪???ъ씤?멸? ?뚮젅?댁뼱 ?대????덈뒗吏 ?뺤씤
+      for (const point of building.hitbox) {
+        if (point.x >= player.x && 
+            point.x <= player.x + player.size &&
+            point.y >= player.y && 
+            point.y <= player.y + player.size) {
+          return true;
+        }
+      }
+      
+      // 2-3. ?좊텇 援먯감 ?뺤씤 (?뚮젅?댁뼱 ?뚮몢由ъ? 嫄대Ъ ?덊듃諛뺤뒪 ?뚮몢由?
+      const playerEdges = [
+        [{x: player.x, y: player.y}, {x: player.x + player.size, y: player.y}], // ?곷떒 ??        [{x: player.x + player.size, y: player.y}, {x: player.x + player.size, y: player.y + player.size}], // ?곗륫 ??        [{x: player.x + player.size, y: player.y + player.size}, {x: player.x, y: player.y + player.size}], // ?섎떒 ??        [{x: player.x, y: player.y + player.size}, {x: player.x, y: player.y}]  // 醫뚯륫 ??      ];
+      
+      for (let i = 0; i < building.hitbox.length; i++) {
+        const p1 = building.hitbox[i];
+        const p2 = building.hitbox[(i + 1) % building.hitbox.length];
+        
+        for (const edge of playerEdges) {
+          if (this.doLinesIntersect(edge[0], edge[1], p1, p2)) {
+            return true;
+          }
+        }
+      }
+      
+      // 紐⑤뱺 寃?щ? ?듦낵?섎㈃ 異⑸룎?섏? ?딆쓬
+      return false;
+    }
+    
+    // 3. ?덊듃諛뺤뒪媛 ?녿뒗 寃쎌슦, 湲곕낯 ?ш컖??異⑸룎 ?뺤씤?쇰줈 異⑸텇
+    return true; // ?대? AABB 異⑸룎 寃?щ? ?듦낵?덉쑝誘濡?異⑸룎??寃껋엫
+  }
+  
+  /**
+   * ???좊텇??援먯감?섎뒗吏 ?뺤씤?섎뒗 ?⑥닔
+   * @param {Object} p1 - 泥?踰덉㎏ ?좊텇???쒖옉??   * @param {Object} p2 - 泥?踰덉㎏ ?좊텇???앹젏
+   * @param {Object} p3 - ??踰덉㎏ ?좊텇???쒖옉??   * @param {Object} p4 - ??踰덉㎏ ?좊텇???앹젏
+   * @returns {boolean} 援먯감 ?щ?
+   */
+  doLinesIntersect(p1, p2, p3, p4) {
+    // 踰≫꽣???몄쟻???댁슜???좊텇 援먯감 寃??    const CCW = (p1, p2, p3) => {
+      return (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x);
+    };
+    
+    const ccw1 = CCW(p1, p2, p3) * CCW(p1, p2, p4);
+    const ccw2 = CCW(p3, p4, p1) * CCW(p3, p4, p2);
+    
+    // ccw1怨?ccw2媛 紐⑤몢 0 ?댄븯?대㈃ ???좊텇??援먯감??    return (ccw1 <= 0 && ccw2 <= 0);
+  }
+
+  /**
+   * ?뚮젅?댁뼱? ?뚰봽 ?ъ씤?멸? 異⑸룎?섎뒗吏 ?뺤씤
+   * @param {Object} player - ?뚮젅?댁뼱 媛앹껜
+   * @returns {boolean} 異⑸룎 ?щ?
+   */
+  isPlayerCollidingWithWarpPoint(player) {
+    const dx = player.x + player.size/2 - this.warpPoint.x;
+    const dy = player.y + player.size/2 - this.warpPoint.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // ?뚰봽 ?ъ씤?몄???嫄곕━媛 ?쇱젙 踰붿쐞 ?댁씤吏 ?뺤씤
+    return distance <= this.warpPoint.interactionDistance;
+  }
+
+  // 鍮뚮━吏 洹몃━湲??⑥닔
+  draw() {
+    // 諛곌꼍 ?됱긽
+    this.ctx.fillStyle = "#2c4930";
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    // 紐⑤뱺 嫄대Ъ 洹몃━湲?    this.buildings.forEach(building => {
+      this.drawBuilding(building);
+    });
+    
+    // ?뚰봽 ?ъ씤??洹몃━湲?    this.drawWarpPoint();
+    
+    // ?뚮젅?댁뼱 洹몃━湲?    this.game.player.draw(this.ctx);
+    
+    // ?붾쾭洹?紐⑤뱶?닿퀬 寃뚯엫?먯꽌 ?붾쾭洹??듭뀡???쒖꽦?붾맂 寃쎌슦 ?덊듃諛뺤뒪 ?쒖떆
+    if (this.game.debugOptions && this.game.debugOptions.showHitboxes) {
+      this.drawHitboxes();
+    }
+    
+    // ?곹샇?묒슜 ?덈궡 硫붿떆吏
+    this.drawInstructions();
+  }
+  
+  // ?덊듃諛뺤뒪 ?쒓컖???⑥닔 異붽?
+  drawHitboxes() {
+    // 嫄대Ъ ?덊듃諛뺤뒪 ?쒖떆
+    this.buildings.forEach(building => {
+      if (building.hitbox && building.hitbox.length >= 3) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(building.hitbox[0].x, building.hitbox[0].y);
+        
+        for (let i = 1; i < building.hitbox.length; i++) {
+          this.ctx.lineTo(building.hitbox[i].x, building.hitbox[i].y);
+        }
+        
+        this.ctx.closePath();
+        this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+        this.ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+        this.ctx.fill();
+        
+        // ?덊듃諛뺤뒪 ?뺤젏 ?쒖떆
+        building.hitbox.forEach(point => {
+          this.ctx.beginPath();
+          this.ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+          this.ctx.fillStyle = 'yellow';
+          this.ctx.fill();
+        });
+      }
+    });
+    
+    // ?뚮젅?댁뼱 ?덊듃諛뺤뒪 ?쒖떆
+    const player = this.game.player;
+    this.ctx.beginPath();
+    this.ctx.rect(player.x, player.y, player.size, player.size);
+    this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+    this.ctx.lineWidth = 2;
+    this.ctx.stroke();
+    
+    // ?뚮젅?댁뼱 ?뺤옣 ?덊듃諛뺤뒪 ?쒖떆 (異⑸룎 寃?ъ뿉 ?ъ슜?섎뒗)
+    const margin = player.size * 0.1;
+    this.ctx.beginPath();
+    this.ctx.rect(
+      player.x + margin,
+      player.y + margin,
+      player.size - margin * 2,
+      player.size - margin * 2
+    );
+    this.ctx.strokeStyle = 'rgba(0, 0, 255, 0.8)';
+    this.ctx.lineWidth = 1;
+    this.ctx.stroke();
+    
+    // ?뚯뒪???ъ씤???쒖떆
+    const playerPoints = [];
+    playerPoints.push({x: player.x + margin, y: player.y + margin}); // 醫뚯긽??    playerPoints.push({x: player.x + player.size - margin, y: player.y + margin}); // ?곗긽??    playerPoints.push({x: player.x + player.size - margin, y: player.y + player.size - margin}); // ?고븯??    playerPoints.push({x: player.x + margin, y: player.y + player.size - margin}); // 醫뚰븯??    playerPoints.push({x: player.x + player.size/2, y: player.y + margin}); // ?곷떒 以묒븰
+    playerPoints.push({x: player.x + player.size - margin, y: player.y + player.size/2}); // ?곗륫 以묒븰
+    playerPoints.push({x: player.x + player.size/2, y: player.y + player.size - margin}); // ?섎떒 以묒븰
+    playerPoints.push({x: player.x + margin, y: player.y + player.size/2}); // 醫뚯륫 以묒븰
+    playerPoints.push({x: player.x + player.size/2, y: player.y + player.size/2}); // 以묒븰
+    
+    playerPoints.forEach(point => {
+      this.ctx.beginPath();
+      this.ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
+      this.ctx.fillStyle = 'blue';
+      this.ctx.fill();
+    });
+  }
+} 
