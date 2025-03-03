@@ -8,6 +8,7 @@ import { UI } from "./ui.js";
 import { Boss } from "./boss.js";
 import { PokerSystem, POKER_PHASES } from "./poker.js";
 import { OrbitingCard } from "./orbitingCard.js";
+import { Village } from "./village.js";
 
 export class Game {
   constructor() {
@@ -19,11 +20,32 @@ export class Game {
     this.baseHeight = 800;
     this.aspectRatio = this.baseWidth / this.baseHeight;
 
-    // 화면 크기 초기화
+    // 화면 크기 초기화 - 먼저 실행하여 캔버스 크기 설정
     this.handleResize();
 
-    // 매니저 클래스 초기화
+    // 게임 상태 초기화
+    this.score = 0;
+    this.keys = {};
+    this.mouseX = 0;
+    this.mouseY = 0;
+    this.isStartScreen = false; // 시작 화면 상태 변경
+    this.isVillageMode = true; // 마을 모드 활성화
+
+    // 매니저 클래스 초기화 - 플레이어를 먼저 생성
     this.player = new Player(this.canvas);
+    
+    // 플레이어 위치 명시적 설정
+    if (this.canvas && this.canvas.width > 0 && this.canvas.height > 0) {
+      this.player.x = this.canvas.width / 2;
+      this.player.y = this.canvas.height / 2;
+    } else {
+      console.error("캔버스 크기 문제 감지:", this.canvas);
+    }
+    
+    // 마을 모드 초기화 - 플레이어 초기화 후 진행
+    this.village = new Village(this.canvas, this);
+    
+    // 나머지 매니저 클래스 초기화
     this.cardManager = new CardManager();
     this.enemyManager = new EnemyManager(this.cardManager, this);
     this.bulletManager = new BulletManager(this);
@@ -149,29 +171,32 @@ export class Game {
       canvasHeight = this.baseHeight * scale;
     }
 
-    // 최대 크기 제한
-    const maxScale = 2;
-    if (scale > maxScale) {
-      scale = maxScale;
-      canvasWidth = this.baseWidth * scale;
-      canvasHeight = this.baseHeight * scale;
-    }
-
     // 캔버스 크기 설정
     this.canvas.width = this.baseWidth;
     this.canvas.height = this.baseHeight;
     this.canvas.style.width = `${canvasWidth}px`;
     this.canvas.style.height = `${canvasHeight}px`;
 
-    // 현재 스케일 저장
-    this.currentScale = scale;
+    // 플레이어가 존재하고 화면 크기가 변경되었을 때 플레이어 위치 보정
+    if (this.player && (this.player.x < 20 || this.player.y < 20 || 
+        this.player.x > this.canvas.width - 20 || this.player.y > this.canvas.height - 20)) {
+      console.log("리사이즈 후 플레이어 위치 보정", {
+        이전x: this.player.x,
+        이전y: this.player.y,
+        캔버스폭: this.canvas.width,
+        캔버스높이: this.canvas.height
+      });
+      
+      // 플레이어 위치 화면 중앙으로 보정
+      this.player.x = this.canvas.width / 2;
+      this.player.y = this.canvas.height / 2;
+    }
 
-    // 슈팅 버튼 위치 업데이트
-    this.shootButton = {
-      x: this.canvas.width - 80,
-      y: this.canvas.height - 80,
-      size: 60,
-    };
+    // 모바일 조작 버튼 위치 조정
+    if (this.isMobile) {
+      this.shootButton.x = this.canvas.width - 80;
+      this.shootButton.y = this.canvas.height - 80;
+    }
   };
 
   setupEventListeners() {
@@ -204,7 +229,8 @@ export class Game {
   }
 
   handleKeyDown(e) {
-    if (this.isStartScreen || this.isGameOver) return;
+    // 마을 모드에서는 키 입력 처리 계속 진행, 게임오버 상태에서만 중단
+    if (this.isGameOver) return;
 
     this.keys[e.key.toLowerCase()] = true; // 소문자로 통일
 
@@ -212,8 +238,24 @@ export class Game {
       this.isPaused = !this.isPaused;
     }
 
-    // E 키를 눌렀을 때 근처 카드 수집
-    if (e.key.toLowerCase() === "e") {
+    // 마을 모드에서 E 키 누르면 워프 포인트와 상호작용
+    if (this.isVillageMode && e.key.toLowerCase() === "e") {
+      if (this.village.tryInteractWithWarpPoint()) {
+        this.isVillageMode = false;
+        this.isStartScreen = false; // 시작 화면 상태 비활성화
+        this.startGame();
+        
+        // 첫 라운드 직접 시작 (round 증가 없이)
+        this.isRoundTransition = false;
+        this.roundStartTime = Date.now();
+        this.isSpawningEnemies = true;
+        this.enemiesKilledInRound = 0;
+      }
+      return;
+    }
+
+    // 마을 모드가 아닐 때 E 키를 눌렀을 때 근처 카드 수집
+    if (!this.isVillageMode && e.key.toLowerCase() === "e") {
       if (this.cardManager.collectNearbyCard()) {
         // 카드를 수집하면 효과 적용
         const result = this.applyCardEffects(
@@ -247,7 +289,8 @@ export class Game {
   }
 
   handleKeyUp(e) {
-    if (this.isStartScreen || this.isGameOver) return;
+    // 게임오버 상태에서만 키 입력 중단
+    if (this.isGameOver) return;
     this.keys[e.key.toLowerCase()] = false; // 소문자로 통일
   }
 
@@ -268,18 +311,18 @@ export class Game {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
-    if (this.isStartScreen) {
-      const buttonBounds = this.ui.drawStartScreen();
+    // 게임 오버 화면에서 마을로 돌아가기 버튼 클릭
+    if (this.isGameOver && this.ui.gameOverButtonArea) {
+      const btnArea = this.ui.gameOverButtonArea;
       if (
-        x >= buttonBounds.buttonBounds.x &&
-        x <= buttonBounds.buttonBounds.x + buttonBounds.buttonBounds.width &&
-        y >= buttonBounds.buttonBounds.y &&
-        y <= buttonBounds.buttonBounds.y + buttonBounds.buttonBounds.height
+        x >= btnArea.x &&
+        x <= btnArea.x + btnArea.width &&
+        y >= btnArea.y &&
+        y <= btnArea.y + btnArea.height
       ) {
-        this.isStartScreen = false;
-        this.startGame();
+        this.returnToVillage();
+        return;
       }
-      return;
     }
 
     if (this.isShowingCommunityCards) {
@@ -549,14 +592,30 @@ export class Game {
     this.isGameOver = false;
     this.isPaused = false;
     this.isPokerPhase = false;
+    this.isStartScreen = false; // 시작 화면 상태 명시적으로 비활성화
     this.round = 1;
     this.score = 0;
 
     // 전역 게임 객체 설정
     window.game = this;
 
+    // 캔버스 크기가 올바른지 확인
+    this.handleResize();
+
     // 게임 요소 초기화
+    const oldPlayer = this.player; // 기존 플레이어 객체 임시 저장
     this.player = new Player(this.canvas);
+    
+    // 플레이어 위치 설정 (기존 위치 유지 또는 중앙으로 설정)
+    if (oldPlayer && oldPlayer.x > 0 && oldPlayer.y > 0) {
+      this.player.x = oldPlayer.x;
+      this.player.y = oldPlayer.y;
+    } else {
+      // 명시적으로 중앙에 배치
+      this.player.x = this.canvas.width / 2;
+      this.player.y = this.canvas.height / 2;
+    }
+    
     this.cardManager = new CardManager();
     this.enemyManager = new EnemyManager(this.cardManager, this);
     this.bulletManager = new BulletManager(this);
@@ -601,13 +660,20 @@ export class Game {
 
     // 자동 발사 관련 속성 추가
     this.lastAutoShootTime = 0;
-    this.autoShootInterval = 250; // 자동 발사 간격을 100ms (0.1초)로 변경
+    this.autoShootInterval = 250; // 자동 발사 간격을 250ms (0.25초)로 설정
   }
 
   gameLoop() {
-    if (this.isStartScreen) {
+    if (this.isVillageMode) {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-      this.ui.drawStartScreen();
+      // 마을 모드 그리기
+      this.village.draw(this.player);
+      
+      // 플레이어 이동 처리
+      this.player.move(this.keys, this.mouseX, this.mouseY, this.joystick);
+      
+      // 플레이어 그리기
+      this.player.draw(this.ctx, this.debugOptions.showHitboxes);
     } else if (!this.isGameOver) {
       if (!this.isPaused) {
         this.update();
@@ -623,6 +689,13 @@ export class Game {
 
     if (this.isPokerPhase) {
       return;
+    }
+
+    // 플레이어 위치 보호 - 왼쪽 상단에 박히는 현상 방지
+    if (this.player.x < 20 && this.player.y < 20) {
+      console.log("플레이어 위치 이상 감지 - 위치 재설정", { 이전x: this.player.x, 이전y: this.player.y });
+      this.player.x = this.canvas.width / 2;
+      this.player.y = this.canvas.height / 2;
     }
 
     // 자동 발사 처리
@@ -721,11 +794,17 @@ export class Game {
         this.currentWeapon = result.currentWeapon;
       }
 
-      // 하트 효과 처리 - 하트 카드 개수에 따라 즉시 체력 변경
-      console.log("하트 효과 체크 시작 - 카드 변경 감지");
-      const heartEffect = result.effects.heart || {};
-      const heartCount = heartEffect.count || 0;
-      console.log("감지된 하트 카드 개수:", heartCount);
+      // 하트 효과 처리 - increaseBagSize 메서드 호출 추가
+      if (
+        result.effects &&
+        result.effects.heart &&
+        result.effects.heart.bagSizeIncrease > 0
+      ) {
+        console.log(
+          `하트 효과: 주머니 크기 ${result.effects.heart.bagSizeIncrease} 증가 시도`
+        );
+        this.player.increaseBagSize(result.effects.heart.bagSizeIncrease);
+      }
 
       // 하트 카드 효과 직접 적용 (칩 주머니 크기 증가)
       if (result.effects.heart && result.effects.heart.count >= 2) {
@@ -877,8 +956,9 @@ export class Game {
     }
 
     if (this.isStartScreen) {
-      this.ui.drawStartScreen();
-      return;
+      // 시작 화면을 더 이상 표시하지 않음
+      // this.ui.drawStartScreen();
+      // return;
     }
 
     if (this.isShowingCommunityCards) {
@@ -938,13 +1018,15 @@ export class Game {
       this.ui.drawRoundTransition(this.round);
     }
 
+    // 게임 오버 화면 그리기
     if (this.isGameOver) {
-      this.ui.drawGameOverScreen({
-        score: this.score,
+      const gameState = {
+        player: this.player,
         round: this.round,
         cards: this.cardManager.getCollectedCards(),
-        player: this.player,
-      });
+      };
+      this.ui.drawGameOverScreen(gameState);
+      return; // 게임 오버 화면 이후 다른 요소는 그리지 않음
     }
   }
 
@@ -957,7 +1039,6 @@ export class Game {
       score: this.score,
       round: this.round,
       cards: this.cardManager.getCollectedCards(),
-      player: this.player,
     });
   }
 
@@ -1016,16 +1097,18 @@ export class Game {
       `라운드 ${this.round} 시작, 남은 아군: ${this.enemyManager.enemies.length}명`
     );
 
-    // 보스전이 끝난 후에는 일반 라운드로 진행
+    // 보스전 관련 상태 확인 및 설정
     if (this.isBossBattle) {
-      this.isBossBattle = false;
-      this.boss = null;
-      this.isSpawningEnemies = true;
+      // 아직 보스전 진행 중이면 보스전 상태 유지
+      this.isBossBattle = true;
+      this.isSpawningEnemies = false;
     } else if (this.round % 3 === 0) {
       // 3의 배수 라운드에서 보스전 시작
-      // 보스전 시작
       this.startBossBattle();
     } else {
+      // 일반 라운드 시작
+      this.isBossBattle = false; // 명시적으로 보스전 아님을 설정
+      this.boss = null; // 보스 객체 제거 (안전을 위해 중복 설정)
       this.isSpawningEnemies = true;
     }
   }
@@ -1550,6 +1633,12 @@ export class Game {
     this.bulletManager.clearBullets();
     this.enemyManager.clearEnemies();
     this.boss = null; // 보스 객체 제거
+    
+    // 다음 라운드로 진행 (마을로 돌아가지 않고 게임 계속)
+    // 잠시 대기 후 다음 라운드 시작 (라운드 전환 효과 표시를 위해)
+    setTimeout(() => {
+      this.startNextRound();
+    }, this.roundTransitionDuration);
   }
 
   // 보스전 패배 처리
@@ -1805,6 +1894,29 @@ export class Game {
     if (this.orbitingCards.length > 0) {
       this.orbitingCards.forEach((card) => card.draw(this.ctx));
     }
+  }
+
+  // 게임 종료 시 마을로 돌아가는 기능 추가
+  returnToVillage() {
+    this.isVillageMode = true;
+    this.isGameOver = false;
+    this.isBossBattle = false;
+    this.isPokerPhase = false;
+    this.isRoundTransition = false;
+    
+    // 게임 요소 초기화
+    this.bulletManager.clearBullets();
+    this.enemyManager.clearEnemies();
+    this.boss = null;
+    
+    // 플레이어 상태 초기화
+    this.player.heal(100); // 체력 완전 회복
+    
+    // 플레이어 위치 초기화
+    this.player.x = this.canvas.width / 2;
+    this.player.y = this.canvas.height / 2;
+    
+    console.log("마을로 돌아왔습니다. 게임 상태 초기화 완료.");
   }
 }
 

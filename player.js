@@ -94,6 +94,17 @@ export class Player {
       this.facingLeft = mouseX > this.x;
     }
 
+    // 캔버스 크기 유효성 검사
+    if (!this.canvas || this.canvas.width <= 0 || this.canvas.height <= 0) {
+      console.error("캔버스 크기 오류: ", this.canvas);
+      // 캔버스가 유효하지 않으면 이동하지 않음
+      return;
+    }
+
+    // 마우스 좌표 저장
+    this.lastMouseX = mouseX;
+    this.lastMouseY = mouseY;
+
     // 대시 충전 업데이트
     const now = Date.now();
     const deltaTime = (now - this.lastChargeTime) / 1000; // 초 단위로 변환
@@ -180,15 +191,24 @@ export class Player {
       }
     }
 
-    // 화면 경계 체크
-    this.x = Math.max(
-      this.size / 2,
-      Math.min(this.canvas.width - this.size / 2, this.x)
-    );
-    this.y = Math.max(
-      this.size / 2,
-      Math.min(this.canvas.height - this.size / 2, this.y)
-    );
+    // 화면 경계 체크 - 강화된 버전
+    if (this.canvas && this.canvas.width > 0 && this.canvas.height > 0) {
+      // 최소 10px 이상, 최대 캔버스 크기보다 10px 작게 설정
+      const minX = Math.max(10, this.size / 2);
+      const minY = Math.max(10, this.size / 2);
+      const maxX = Math.max(this.canvas.width - 10, this.canvas.width - this.size / 2);
+      const maxY = Math.max(this.canvas.height - 10, this.canvas.height - this.size / 2);
+      
+      this.x = Math.max(minX, Math.min(maxX, this.x));
+      this.y = Math.max(minY, Math.min(maxY, this.y));
+      
+      // 디버깅용 출력 (비정상적인 값이 있으면 콘솔에 기록)
+      if (this.x <= minX || this.x >= maxX || this.y <= minY || this.y >= maxY) {
+        console.log("플레이어 경계 도달: ", { x: this.x, y: this.y, canvasWidth: this.canvas.width, canvasHeight: this.canvas.height });
+      }
+    } else {
+      console.error("캔버스 크기 오류 (경계 체크): ", this.canvas);
+    }
   }
 
   dash(targetX, targetY) {

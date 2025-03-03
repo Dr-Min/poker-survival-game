@@ -228,7 +228,6 @@ export class UI {
     // 칩 수량 텍스트 외곽선
     this.ctx.strokeStyle = "#ffffff";
     this.ctx.lineWidth = 3;
-    this.ctx.font = "14px Arial";
     this.ctx.textAlign = "center";
     this.ctx.strokeText(
       `${Math.floor(player.chips)} / ${Math.floor(player.chipBag)} 칩`,
@@ -1575,14 +1574,37 @@ export class UI {
       startX += cardWidth + cardSpacing;
     });
 
-    // 재시작 안내
-    this.ctx.fillStyle = "#aaaaaa";
-    this.ctx.font = "20px Arial";
+    // 마을로 돌아가기 버튼
+    const buttonWidth = 240;
+    const buttonHeight = 60;
+    const buttonX = this.canvas.width / 2 - buttonWidth / 2;
+    const buttonY = this.canvas.height - 120;
+
+    // 버튼 배경
+    this.ctx.fillStyle = "#4A90E2";
+    this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+    // 버튼 테두리
+    this.ctx.strokeStyle = "#ffffff";
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+    // 버튼 텍스트
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.font = "24px Arial";
     this.ctx.fillText(
-      "새 게임을 시작하려면 페이지를 새로고침하세요",
+      "마을로 돌아가기",
       this.canvas.width / 2,
-      this.canvas.height - 50
+      buttonY + buttonHeight / 2 + 8
     );
+
+    // 버튼 영역 반환 (클릭 감지용)
+    this.gameOverButtonArea = {
+      x: buttonX,
+      y: buttonY,
+      width: buttonWidth,
+      height: buttonHeight,
+    };
   }
 
   // 시각 효과 추가
