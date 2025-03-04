@@ -6,7 +6,7 @@ export class Player {
     this.x = canvas.width / 2;
     this.y = canvas.height / 2;
     this.size = 20;
-    this.speed = 1.6;
+    this.speed = 0.8;
     this.chips = 100;
     this.chipBag = 100;
     console.log(

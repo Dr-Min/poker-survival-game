@@ -175,37 +175,43 @@ export class Village {
   
   // 배치 불러오기
   loadLayout() {
+    // 저장된 레이아웃 데이터 불러오기
     const savedLayout = localStorage.getItem('villageLayout');
     if (savedLayout) {
       try {
-        const layoutData = JSON.parse(savedLayout);
+        this.layoutData = JSON.parse(savedLayout);
         
-        // 건물 위치 업데이트
-        layoutData.buildings.forEach((savedBuilding, index) => {
-          if (index < this.buildings.length) {
-            const building = this.buildings[index];
-            building.x = savedBuilding.x * this.canvas.width;
-            building.y = savedBuilding.y * this.canvas.height;
-            
-            // 다각형 히트박스가 있는 경우 적용
-            if (savedBuilding.hitbox && savedBuilding.hitbox.length >= 3) {
-              building.hitbox = savedBuilding.hitbox.map(vertex => ({
-                x: building.x + vertex.x * building.width, // 절대 좌표로 변환
-                y: building.y + vertex.y * building.height
-              }));
+        // 저장된 건물 위치 적용
+        if (this.layoutData.buildings && this.buildings.length > 0) {
+          this.layoutData.buildings.forEach((buildingData, index) => {
+            if (index < this.buildings.length) {
+              const building = this.buildings[index];
+              building.x = buildingData.x * this.canvas.width;
+              building.y = buildingData.y * this.canvas.height;
+              
+              // 모든 건물의 히트박스 템플릿에서 새 히트박스 생성 - 반드시 재생성
+              if (building.hitboxTemplate) {
+                building.hitbox = building.hitboxTemplate.map(point => {
+                  return {
+                    x: Math.floor(building.x + point.x * building.width),
+                    y: Math.floor(building.y + point.y * building.height)
+                  };
+                });
+                console.log(`${building.name} 히트박스 업데이트됨:`, building.hitbox);
+              }
             }
-          }
-        });
-        
-        // 워프 포인트 위치 업데이트
-        if (layoutData.warpPoint) {
-          this.warpPoint.x = layoutData.warpPoint.x * this.canvas.width;
-          this.warpPoint.y = layoutData.warpPoint.y * this.canvas.height;
+          });
         }
         
-        console.log('마을 레이아웃을 불러왔습니다.');
+        // 워프 포인트 위치 적용
+        if (this.layoutData.warpPoint) {
+          this.warpPoint.x = this.layoutData.warpPoint.x * this.canvas.width;
+          this.warpPoint.y = this.layoutData.warpPoint.y * this.canvas.height;
+        }
+        
+        console.log("레이아웃 로드 완료");
       } catch (error) {
-        console.error('레이아웃 불러오기 오류:', error);
+        console.error("레이아웃 데이터 파싱 실패:", error);
       }
     }
   }
@@ -216,50 +222,54 @@ export class Village {
       { 
         name: "의료소", 
         path: "assets/Medic Shopp.png", 
-        width: 192 * 0.7, // 30% 축소
-        height: 192 * 0.7, // 30% 축소
+        width: 192 * 0.9, // 30% -> 10% 축소 (20% 증가)
+        height: 192 * 0.9, // 30% -> 10% 축소 (20% 증가)
         // 히트박스 (상대좌표) - 더 넓게 조정
         hitboxTemplate: [
-          {x: 0.5, y: 0.0},   // 상단 가장 위
-          {x: 1.0, y: 0.5},   // 우측 가장 오른쪽
-          {x: 0.5, y: 1.0},   // 하단 가장 아래
-          {x: 0.0, y: 0.5}    // 좌측 가장 왼쪽
+          {x: 0.5, y: 0.2},   // 상단 위치 - 20% 아래로 이동 (12시)
+          {x: 0.7, y: 0.3},   // 오른쪽 상단 추가점 (1-2시 방향)
+          {x: 0.8, y: 0.5},   // 우측 - 오른쪽에서 20% 안쪽으로 (3시)
+          {x: 0.5, y: 0.9},   // 하단 - 아래로 더 확장 (6시)
+          {x: 0.1, y: 0.7}    // 왼쪽 하단 - 7시 방향으로 더 확장
         ]
       },
       { 
         name: "레스토랑", 
         path: "assets/Resturant.png", 
-        width: 192 * 0.7, // 30% 축소
-        height: 192 * 0.7, // 30% 축소
+        width: 192 * 0.9, // 30% -> 10% 축소 (20% 증가)
+        height: 192 * 0.9, // 30% -> 10% 축소 (20% 증가)
         hitboxTemplate: [
-          {x: 0.5, y: 0.0},
-          {x: 1.0, y: 0.5},
-          {x: 0.5, y: 1.0},
-          {x: 0.0, y: 0.5}
+          {x: 0.5, y: 0.2},   // 상단 위치 - 20% 아래로 이동 (12시)
+          {x: 0.7, y: 0.3},   // 오른쪽 상단 추가점 (1-2시 방향)
+          {x: 0.8, y: 0.5},   // 우측 - 오른쪽에서 20% 안쪽으로 (3시)
+          {x: 0.5, y: 0.9},   // 하단 - 아래로 더 확장 (6시)
+          {x: 0.1, y: 0.7}    // 왼쪽 하단 - 7시 방향으로 더 확장
         ]
       },
       { 
         name: "총포상", 
         path: "assets/Gun Shop.png", 
-        width: 192 * 0.7, // 30% 축소
-        height: 192 * 0.7, // 30% 축소
+        width: 192 * 0.9, // 30% -> 10% 축소 (20% 증가)
+        height: 192 * 0.9, // 30% -> 10% 축소 (20% 증가)
         hitboxTemplate: [
-          {x: 0.5, y: 0.0},
-          {x: 1.0, y: 0.5},
-          {x: 0.5, y: 1.0},
-          {x: 0.0, y: 0.5}
+          {x: 0.5, y: 0.2},   // 상단 위치 - 20% 아래로 이동 (12시)
+          {x: 0.7, y: 0.3},   // 오른쪽 상단 추가점 (1-2시 방향)
+          {x: 0.8, y: 0.5},   // 우측 - 오른쪽에서 20% 안쪽으로 (3시)
+          {x: 0.5, y: 0.9},   // 하단 - 아래로 더 확장 (6시)
+          {x: 0.1, y: 0.7}    // 왼쪽 하단 - 7시 방향으로 더 확장
         ]
       },
       { 
         name: "창고", 
         path: "assets/Shed.png", 
-        width: 192 * 0.7, // 30% 축소
-        height: 192 * 0.7, // 30% 축소
+        width: 192 * 0.9, // 30% -> 10% 축소 (20% 증가)
+        height: 192 * 0.9, // 30% -> 10% 축소 (20% 증가)
         hitboxTemplate: [
-          {x: 0.5, y: 0.0},
-          {x: 1.0, y: 0.5},
-          {x: 0.5, y: 1.0},
-          {x: 0.0, y: 0.5}
+          {x: 0.5, y: 0.2},   // 상단 위치 - 20% 아래로 이동 (12시)
+          {x: 0.7, y: 0.3},   // 오른쪽 상단 추가점 (1-2시 방향)
+          {x: 0.8, y: 0.5},   // 우측 - 오른쪽에서 20% 안쪽으로 (3시)
+          {x: 0.5, y: 0.9},   // 하단 - 아래로 더 확장 (6시)
+          {x: 0.1, y: 0.7}    // 왼쪽 하단 - 7시 방향으로 더 확장
         ]
       }
     ];
@@ -333,7 +343,7 @@ export class Village {
           building.x = buildingData.x * this.canvas.width;
           building.y = buildingData.y * this.canvas.height;
           
-          // 절대 좌표로 히트박스 생성
+          // 절대 좌표로 히트박스 생성 - 수정된 템플릿 사용
           if (building.hitboxTemplate) {
             building.hitbox = building.hitboxTemplate.map(point => {
               return {
@@ -341,6 +351,7 @@ export class Village {
                 y: Math.floor(building.y + point.y * building.height)
               };
             });
+            console.log(`초기 ${building.name} 히트박스 생성:`, building.hitbox);
           }
         }
       });
@@ -1022,23 +1033,19 @@ export class Village {
   
   // 건물 이동 시 히트박스 업데이트
   onBuildingMoved(building) {
-    console.log(`건물 '${building.name}' 위치 변경: x=${building.x}, y=${building.y}`);
-    
-    // 건물에 히트박스가 정의되어 있으면 위치에 맞게 업데이트
+    // 건물이 이동되면 히트박스도 함께 업데이트
     if (building.hitboxTemplate) {
-      // 히트박스 생성 (절대 좌표로 변환)
       building.hitbox = building.hitboxTemplate.map(point => {
         return {
           x: Math.floor(building.x + point.x * building.width),
           y: Math.floor(building.y + point.y * building.height)
         };
       });
+      console.log(`건물 ${building.name} 이동 후 히트박스 업데이트:`, building.hitbox);
     }
     
-    // 건물 위치 저장
-    if (this.game.isEditMode) {
-      this.saveLayout();
-    }
+    // 레이아웃 저장
+    this.saveLayout();
   }
   
   // 마을 그리기
