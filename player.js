@@ -6,7 +6,9 @@ export class Player {
     this.x = canvas.width / 2;
     this.y = canvas.height / 2;
     this.size = 20;
-    this.speed = 0.8;
+    this.villageSpeed = 0.8; // 마을 모드에서의 속도
+    this.combatSpeed = 1.6; // 전투 모드에서의 속도
+    this.speed = this.villageSpeed; // 기본은 마을 모드 속도
     this.chips = 100;
     this.chipBag = 100;
     console.log(
@@ -598,5 +600,11 @@ export class Player {
 
   handleTouchEnd() {
     this.isTouching = false;
+  }
+
+  // 게임 모드에 따라 속도 설정하는 메서드 추가
+  setModeSpeed(isVillageMode) {
+    this.speed = isVillageMode ? this.villageSpeed : this.combatSpeed;
+    console.log(`플레이어 속도 변경: ${this.speed} (${isVillageMode ? '마을' : '전투'} 모드)`);
   }
 }

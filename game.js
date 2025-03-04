@@ -1920,25 +1920,28 @@ export class Game {
 
   // 게임 종료 시 마을로 돌아가는 기능 추가
   returnToVillage() {
+    console.log("마을로 돌아감");
     this.isVillageMode = true;
-    this.isGameOver = false;
-    this.isBossBattle = false;
-    this.isPokerPhase = false;
+    this.player.setModeSpeed(this.isVillageMode); // 마을 모드 속도로 설정
     this.isRoundTransition = false;
-    
-    // 게임 요소 초기화
-    this.bulletManager.clearBullets();
-    this.enemyManager.clearEnemies();
+    this.isBossBattle = false;
     this.boss = null;
+    this.isPokerPhase = false;
     
-    // 플레이어 상태 초기화
-    this.player.heal(100); // 체력 완전 회복
+    // 포커 시스템 초기화 - 메서드 이름 수정
+    if (this.pokerSystem && typeof this.pokerSystem.resetGame === 'function') {
+      this.pokerSystem.resetGame();
+    }
+
+    // 플레이어 위치 초기화 (마을 워프 포인트 위치로)
+    this.player.x = this.village.warpPoint.x;
+    this.player.y = this.village.warpPoint.y;
     
-    // 플레이어 위치 초기화
-    this.player.x = this.canvas.width / 2;
-    this.player.y = this.canvas.height / 2;
-    
-    console.log("마을로 돌아왔습니다. 게임 상태 초기화 완료.");
+    // 기존 모든 엔티티 제거
+    this.enemyManager.enemies = [];
+    this.enemyManager.bullets = [];
+    this.bulletManager.bullets = [];
+    this.orbitingCards = [];
   }
 
   doLinesIntersect(p1, p2, p3, p4) {
@@ -1947,6 +1950,36 @@ export class Game {
     }
     
     return ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
+  }
+
+  // 마을 모드에서 게임 모드로 전환
+  startRound() {
+    console.log("라운드 시작");
+    this.isVillageMode = false;
+    this.player.setModeSpeed(this.isVillageMode); // 전투 모드 속도로 설정
+    this.round = 1;
+    this.enemiesKilledInRound = 0;
+    this.enemiesRequiredForNextRound = 10;
+    this.roundStartTime = Date.now();
+    this.isRoundTransition = false;
+    this.isSpawningEnemies = true;
+    this.isBossBattle = false;
+    
+    // 포커 시스템 초기화 - 메서드 이름 수정
+    if (this.pokerSystem && typeof this.pokerSystem.resetGame === 'function') {
+      this.pokerSystem.resetGame();
+    }
+
+    // 플레이어 위치 초기화
+    this.player.x = this.canvas.width / 2;
+    this.player.y = this.canvas.height / 2;
+    
+    // 기존 적 제거
+    this.enemyManager.enemies = [];
+    this.enemyManager.bullets = [];
+    
+    // 총알 초기화
+    this.bulletManager.bullets = [];
   }
 }
 

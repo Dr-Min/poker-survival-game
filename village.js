@@ -1025,10 +1025,16 @@ export class Village {
   // 워프 포인트와 상호작용 시도
   tryInteractWithWarpPoint() {
     if (this.warpPoint.active) {
-      // 게임 시작 로직 호출
-      return true;
+      console.log("워프 포인트 활성화 - 게임 라운드 시작");
+      // 게임 모드를 마을에서 라운드 모드로 변경
+      if (this.game.startRound) {
+        this.game.startRound(); // 게임의 startRound 메서드 호출
+      } else {
+        // 기존 호환성을 위한 코드
+        this.game.isVillageMode = false;
+        this.game.player.setModeSpeed(false); // 전투 모드 속도 설정
+      }
     }
-    return false;
   }
   
   // 건물 이동 시 히트박스 업데이트
