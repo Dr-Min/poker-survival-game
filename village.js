@@ -1,5 +1,9 @@
 // village.js - 마을 관련 기능을 담당하는 모듈
 
+// 양 관련 클래스 import
+import { Sheep } from './sheep.js';
+import { SheepAnimator } from './sheepAnimator.js';
+
 export class Village {
   constructor(canvas, game) {
     this.canvas = canvas;
@@ -23,6 +27,11 @@ export class Village {
     this.adjustingCorner = null; // 조정 중인 모서리: 'tl', 'tr', 'bl', 'br'
     this.isEditingPolygon = false; // 다각형 편집 모드
     this.selectedVertex = null; // 선택된 정점 인덱스
+    
+    // 양 관련 속성 추가
+    this.sheepAnimator = new SheepAnimator();
+    this.sheeps = [];
+    this.numSheeps = 3; // 양 마릿수
     
     // 기본 레이아웃 설정 (사용자 제공 데이터)
     const defaultLayout = {
@@ -109,6 +118,9 @@ export class Village {
         this.toggleDebugInfo();
       }
     });
+    
+    // 양 초기화
+    this.initSheeps();
   }
   
   // 편집 모드 토글
@@ -371,6 +383,234 @@ export class Village {
     
     // 저장된 배치 불러오기
     this.loadLayout();
+  }
+  
+  // 양 초기화 함수 추가
+  async initSheeps() {
+    try {
+      console.log('양 애니메이션 로드 시작...');
+      // 양 애니메이션 리소스 로드
+      const loaded = await this.sheepAnimator.loadAnimations();
+      if (!loaded) {
+        console.error('양 애니메이션 로드 실패');
+        return;
+      }
+      
+      // 애니메이션 로드 후 유효성 검사
+      const animations = this.sheepAnimator.getAnimations();
+      if (!animations || !animations.idle || !animations.idle.frames || animations.idle.frames.length === 0) {
+        console.error('필수 idle 애니메이션이 없습니다.');
+        return;
+      }
+      
+      console.log('양 애니메이션 로드 완료, 양 생성 시작...');
+      
+      // 기존 양 초기화
+      this.sheeps = [];
+      
+      // 양 생성 (지정한 마릿수만큼)
+      for (let i = 0; i < this.numSheeps; i++) {
+        // 랜덤 위치에 양 배치 (건물과 충돌하지 않는 위치에)
+        let x, y;
+        let validPosition = false;
+        let tryCount = 0;
+        const maxTries = 50; // 최대 시도 횟수
+        
+        // 유효한 위치를 찾을 때까지 시도
+        while (!validPosition && tryCount < maxTries) {
+          tryCount++;
+          
+          // 화면의 10~90% 영역에 랜덤 위치 설정
+          x = this.canvas.width * 0.1 + Math.random() * (this.canvas.width * 0.8);
+          y = this.canvas.height * 0.1 + Math.random() * (this.canvas.height * 0.8);
+          
+          // 건물과 충돌 여부 확인
+          validPosition = true;
+          for (const building of this.buildings) {
+            const margin = 50; // 건물로부터 최소 거리
+            if (this.isPointNearBuilding(x, y, building, margin)) {
+              validPosition = false;
+              break;
+            }
+          }
+          
+          // 워프 포인트와의 충돌 확인
+          if (validPosition && this.warpPoint) {
+            const distance = Math.sqrt(
+              Math.pow(x - this.warpPoint.x, 2) + 
+              Math.pow(y - this.warpPoint.y, 2)
+            );
+            if (distance < 100) { // 워프 포인트로부터 100픽셀 이내는 피함
+              validPosition = false;
+            }
+          }
+        }
+        
+        // 적절한 위치를 찾지 못한 경우 기본 위치 사용
+        if (!validPosition) {
+          console.warn(`양 #${i+1} 위치 찾기 실패, 기본 위치 사용`);
+          x = this.canvas.width * (0.2 + i * 0.2);
+          y = this.canvas.height * 0.5;
+        }
+        
+        try {
+          // 새 양 인스턴스 생성 및 추가
+          const sheep = new Sheep(this.canvas, x, y, this.sheepAnimator.getAnimations());
+          this.sheeps.push(sheep);
+          console.log(`양 #${i+1} 생성 완료: x=${x.toFixed(0)}, y=${y.toFixed(0)}`);
+        } catch (error) {
+          console.error(`양 #${i+1} 생성 중 오류 발생:`, error);
+        }
+      }
+      
+      console.log(`${this.sheeps.length}마리 양 생성 완료`);
+    } catch (error) {
+      console.error('양 초기화 실패:', error);
+    }
+  }
+  
+  // 점이 건물 근처인지 확인
+  isPointNearBuilding(x, y, building, margin) {
+    // 건물 주변의 마진을 포함한 직사각형 영역 생성
+    const rect = {
+      left: building.x - building.width/2 - margin,
+      right: building.x + building.width/2 + margin,
+      top: building.y - building.height/2 - margin,
+      bottom: building.y + building.height/2 + margin
+    };
+    
+    // 점이 확장된 영역 내에 있는지 확인
+    return (
+      x >= rect.left && 
+      x <= rect.right && 
+      y >= rect.top && 
+      y <= rect.bottom
+    );
+  }
+  
+  // 양 업데이트 함수
+  updateSheeps(deltaTime, player) {
+    // player 객체가 없으면 중단
+    if (!player) return;
+    
+    for (const sheep of this.sheeps) {
+      // 양 상태 업데이트 (플레이어와 다른 양들 참조 전달)
+      sheep.update(deltaTime, player, this.sheeps);
+      
+      // 양이 건물이나 워프 포인트와 충돌하지 않도록 위치 조정
+      this.adjustSheepPosition(sheep);
+    }
+  }
+  
+  // 양 위치 조정 (충돌 방지)
+  adjustSheepPosition(sheep) {
+    // 건물과의 충돌 처리
+    for (const building of this.buildings) {
+      // 양과 건물 사이의 거리 계산
+      const dx = sheep.x - building.x;
+      const dy = sheep.y - building.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // 양의 최소 안전 거리
+      const minDistance = (building.width + building.height) / 4;
+      
+      // 충돌 발생 시 양 위치 조정
+      if (distance < minDistance) {
+        // 충돌 방향에 따라 양을 밀어냄 - 힘을 약하게 조정하여 부드럽게 밀려나도록
+        const pushForce = (minDistance - distance) / minDistance;
+        
+        if (distance > 0) { // 0으로 나누기 방지
+          // 보다 부드러운 충돌 해결
+          sheep.x += (dx / distance) * pushForce * 3; // 5에서 3으로 감소
+          sheep.y += (dy / distance) * pushForce * 3;
+          
+          // 목표 위치도 점진적으로 조정하여 부드럽게 목표 변경
+          if (sheep.targetX !== null && sheep.targetY !== null) {
+            // 건물 반대 방향으로 목표점 이동
+            sheep.targetX += (dx / distance) * pushForce * 5;
+            sheep.targetY += (dy / distance) * pushForce * 5;
+          }
+        } else {
+          // 같은 위치에 있는 경우 (distance = 0) 랜덤 방향으로 밀어냄
+          const angle = Math.random() * Math.PI * 2;
+          sheep.x += Math.cos(angle) * 3; // 5에서 3으로 감소
+          sheep.y += Math.sin(angle) * 3;
+        }
+        
+        // 이동 상태인 경우 목표 지점을 즉시 초기화하지 않고, 도망가는 상태면 유지
+        if (sheep.currentState === sheep.states.MOVE) {
+          // 바로 IDLE 상태로 전환하지 않고, 목표점만 수정하여 자연스럽게 이동하도록
+          if (sheep.targetX !== null && sheep.targetY !== null) {
+            // 방향을 건물에서 멀어지는 쪽으로 수정
+            const newTargetDist = 50 + Math.random() * 30;
+            sheep.targetX = sheep.x + (dx / distance) * newTargetDist;
+            sheep.targetY = sheep.y + (dy / distance) * newTargetDist;
+          }
+        }
+      }
+    }
+    
+    // 워프 포인트와의 충돌 처리
+    const dwx = sheep.x - this.warpPoint.x;
+    const dwy = sheep.y - this.warpPoint.y;
+    const warpDistance = Math.sqrt(dwx * dwx + dwy * dwy);
+    
+    if (warpDistance < 80) { // 워프 포인트와의 안전 거리
+      const pushForce = (80 - warpDistance) / 80;
+      
+      if (warpDistance > 0) {
+        // 부드러운 밀어내기
+        sheep.x += (dwx / warpDistance) * pushForce * 3; // 5에서 3으로 감소
+        sheep.y += (dwy / warpDistance) * pushForce * 3;
+        
+        // 목표 위치도 조정
+        if (sheep.targetX !== null && sheep.targetY !== null) {
+          sheep.targetX += (dwx / warpDistance) * pushForce * 5;
+          sheep.targetY += (dwy / warpDistance) * pushForce * 5;
+        }
+      } else {
+        const angle = Math.random() * Math.PI * 2;
+        sheep.x += Math.cos(angle) * 3;
+        sheep.y += Math.sin(angle) * 3;
+      }
+      
+      // 이동 상태인 경우 목표 지점 점진적으로 변경
+      if (sheep.currentState === sheep.states.MOVE) {
+        if (sheep.targetX !== null && sheep.targetY !== null) {
+          // 방향을 워프 포인트에서 멀어지는 쪽으로 수정
+          const newTargetDist = 50 + Math.random() * 30;
+          sheep.targetX = sheep.x + (dwx / warpDistance) * newTargetDist;
+          sheep.targetY = sheep.y + (dwy / warpDistance) * newTargetDist;
+        }
+      }
+    }
+    
+    // 화면 밖으로 나가지 않도록 함
+    const margin = 50;
+    sheep.x = Math.max(margin, Math.min(this.canvas.width - margin, sheep.x));
+    sheep.y = Math.max(margin, Math.min(this.canvas.height - margin, sheep.y));
+  }
+  
+  // 양 그리기 함수
+  drawSheeps(player) {
+    // Y 좌표에 따라 양 정렬 (플레이어와의 깊이 관계 표현)
+    const sortedSheeps = [...this.sheeps].sort((a, b) => a.y - b.y);
+    
+    for (const sheep of sortedSheeps) {
+      // 플레이어보다 앞에 있는 양만 그림 (플레이어 뒤에 있는 양은 나중에 그림)
+      if (sheep.y < player.y) {
+        sheep.draw();
+      }
+    }
+  }
+  
+  // 플레이어 뒤에 있는 양 그리기
+  drawSheepsBehindPlayer(player) {
+    for (const sheep of this.sheeps) {
+      if (sheep.y >= player.y) {
+        sheep.draw();
+      }
+    }
   }
   
   // 마우스 이벤트 핸들러 수정 - 다각형 편집과 기존 코드를 통합
@@ -1060,6 +1300,9 @@ export class Village {
     this.ctx.fillStyle = this.villageBackground;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     
+    // 플레이어보다 뒤에 있는 양 그리기
+    this.drawSheeps(player);
+    
     // 건물 그리기 (플레이어보다 뒤에 있는 건물)
     this.buildings.forEach(building => {
       if (building.y + building.height < player.y) {
@@ -1076,6 +1319,9 @@ export class Village {
         this.drawBuilding(building);
       }
     });
+    
+    // 플레이어보다 앞에 있는 양 그리기
+    this.drawSheepsBehindPlayer(player);
     
     // 편집 모드 UI 그리기
     if (this.game.isEditMode) {
@@ -1130,11 +1376,11 @@ export class Village {
     if (keys.ArrowDown || keys.s) dy += player.speed;
     if (keys.ArrowLeft || keys.a) {
       dx -= player.speed;
-      player.facingLeft = true;
+      player.facingLeft = true; // 왼쪽을 향하도록 유지
     }
     if (keys.ArrowRight || keys.d) {
       dx += player.speed;
-      player.facingLeft = false;
+      player.facingLeft = false; // 오른쪽을 향하도록 수정
     }
     
     // 이동이 없으면 처리 중단
@@ -1416,5 +1662,13 @@ export class Village {
     
     this.game.debugOptions.showDebugInfo = !this.game.debugOptions.showDebugInfo;
     console.log(`디버그 정보 표시: ${this.game.debugOptions.showDebugInfo ? '켜짐' : '꺼짐'}`);
+  }
+
+  // 마을 업데이트
+  update(deltaTime, player) {
+    // 양 업데이트
+    if (player) {
+      this.updateSheeps(deltaTime, player);
+    }
   }
 } 

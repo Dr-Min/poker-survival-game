@@ -676,6 +676,13 @@ export class Game {
   }
 
   gameLoop() {
+    if (this.debugMode) {
+      if (this.debugOptions.showDebugInfo) {
+        console.log('FPS:', Math.round(1000 / (Date.now() - this.lastFrameTime)));
+      }
+      this.lastFrameTime = Date.now();
+    }
+    
     if (this.isVillageMode) {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       
@@ -690,6 +697,11 @@ export class Game {
       if (this.village) {
         this.village.handlePlayerMovement(this.player, this.keys);
       }
+      
+      // 마을 업데이트 추가 (플레이어 움직임과 관계없이 양 애니메이션 업데이트)
+      // 더 작은 deltaTime을 사용하여 더 부드러운 움직임을 구현
+      const deltaTime = this.lastFrameTime ? Math.min(16.67, Date.now() - this.lastFrameTime) : 16.67;
+      this.village.update(deltaTime, this.player);
       
       // 마을 모드 그리기
       this.village.draw(this.player);

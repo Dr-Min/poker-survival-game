@@ -91,9 +91,15 @@ export class Player {
 
     // 터치나 마우스 방향에 따라 캐릭터 방향 설정
     if (this.isTouching) {
-      this.facingLeft = this.touchEndX > this.x;
+      this.facingLeft = this.touchEndX < this.x;
     } else {
-      this.facingLeft = mouseX > this.x;
+      if (keys.ArrowLeft || keys.a) {
+        this.facingLeft = true;
+      } else if (keys.ArrowRight || keys.d) {
+        this.facingLeft = false;
+      } else if (mouseX !== undefined) {
+        this.facingLeft = mouseX < this.x;
+      }
     }
 
     // 캔버스 크기 유효성 검사
@@ -139,7 +145,11 @@ export class Player {
         this.y += (dy / distance) * currentSpeed;
         this.isMoving = true;
         this.currentSprite = this.moveSprite;
-        // 조이스틱 사용 시에도 마우스 방향 우선
+        
+        // 조이스틱 방향에 따라 캐릭터 방향 설정
+        if (dx != 0) {
+          this.facingLeft = dx < 0;
+        }
       } else {
         this.isMoving = false;
         this.currentSprite = this.idelSprite;
@@ -151,10 +161,16 @@ export class Player {
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       if (distance > 5) {
+        // 방향에 따라 캐릭터 이동
         this.x += (dx / distance) * currentSpeed;
         this.y += (dy / distance) * currentSpeed;
         this.isMoving = true;
         this.currentSprite = this.moveSprite;
+        
+        // 터치 방향에 따라 캐릭터 방향 설정
+        if (dx != 0) {
+          this.facingLeft = dx < 0;
+        }
       } else {
         this.isMoving = false;
         this.currentSprite = this.idelSprite;
