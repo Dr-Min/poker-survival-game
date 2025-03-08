@@ -89,17 +89,26 @@ export class Player {
     this.prevX = this.x;
     this.prevY = this.y;
 
-    // 터치나 마우스 방향에 따라 캐릭터 방향 설정
-    if (this.isTouching) {
-      this.facingLeft = this.touchEndX < this.x;
-    } else {
-      if (keys.ArrowLeft || keys.a) {
-        this.facingLeft = true;
-      } else if (keys.ArrowRight || keys.d) {
-        this.facingLeft = false;
-      } else if (mouseX !== undefined) {
-        this.facingLeft = mouseX < this.x;
-      }
+    // 터치나 마우스 방향에 따라 캐릭터 방향 설정 - 마우스 우선
+    if (mouseX !== undefined) {
+      // 마우스 방향을 최우선으로 설정 (마우스가 오른쪽에 있으면 오른쪽을 봄)
+      this.facingLeft = mouseX < this.x; // 원래 논리로 복원
+    } else if (this.isTouching) {
+      // 터치 방향으로 설정 (마우스가 없는 경우)
+      this.facingLeft = this.touchEndX < this.x; // 원래 논리로 복원
+    } else if (keys.ArrowLeft || keys.a) {
+      // 키보드 좌우 방향키 (마우스와 터치가 없는 경우)
+      this.facingLeft = true; // 왼쪽 키를 누르면 왼쪽을 봄
+    } else if (keys.ArrowRight || keys.d) {
+      // 키보드 좌우 방향키 (마우스와 터치가 없는 경우)
+      this.facingLeft = false; // 오른쪽 키를 누르면 오른쪽을 봄
+    }
+
+    // 마우스 좌표 저장과 방향 디버깅
+    if (mouseX !== undefined) {
+      console.log(`마우스 방향: x=${mouseX}, 플레이어: x=${this.x}, facingLeft=${this.facingLeft}`);
+      this.lastMouseX = mouseX;
+      this.lastMouseY = mouseY;
     }
 
     // 캔버스 크기 유효성 검사
@@ -108,10 +117,6 @@ export class Player {
       // 캔버스가 유효하지 않으면 이동하지 않음
       return;
     }
-
-    // 마우스 좌표 저장
-    this.lastMouseX = mouseX;
-    this.lastMouseY = mouseY;
 
     // 대시 충전 업데이트
     const now = Date.now();
@@ -148,7 +153,7 @@ export class Player {
         
         // 조이스틱 방향에 따라 캐릭터 방향 설정
         if (dx != 0) {
-          this.facingLeft = dx < 0;
+          this.facingLeft = dx < 0; // 원래 논리로 복원
         }
       } else {
         this.isMoving = false;
@@ -169,7 +174,7 @@ export class Player {
         
         // 터치 방향에 따라 캐릭터 방향 설정
         if (dx != 0) {
-          this.facingLeft = dx < 0;
+          this.facingLeft = dx < 0; // 원래 논리로 복원
         }
       } else {
         this.isMoving = false;
@@ -432,7 +437,7 @@ export class Player {
       }
 
       // 캐릭터 좌우 반전을 위한 설정
-      if (this.facingLeft) {
+      if (!this.facingLeft) { // 논리 반전: facingLeft가 false일 때 좌우 반전
         ctx.scale(-1, 1);
       }
 

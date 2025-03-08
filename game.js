@@ -55,7 +55,7 @@ export class Game {
     }
     
     // 마을 모드 초기화 - 플레이어 초기화 후 진행
-    this.village = new Village(this.canvas, this);
+    this.startVillage();
     
     // 나머지 매니저 클래스 초기화
     this.cardManager = new CardManager();
@@ -1992,6 +1992,33 @@ export class Game {
     
     // 총알 초기화
     this.bulletManager.bullets = [];
+  }
+
+  startVillage() {
+    // 게임 모드 전환 시 마을 생성
+    this.village = new Village(this.canvas, this);
+    
+    // 마을에 플레이어 객체를 전달
+    this.village.setPlayer(this.player);
+    
+    // 양을 생성하는 코드
+    this.village.initSheeps();
+    
+    // 플레이어 이동 속도 조정 (마을에서는 더 느리게)
+    this.player.setModeSpeed(true);
+  }
+
+  updateVillageMode() {
+    // 게임이 시작되었다면 마을 모드로 전환
+    this.isVillageMode = true;
+    this.isStartScreen = false;
+    this.isPaused = false;
+    this.isGameOver = false;
+    this.isRoundComplete = false;
+    this.isRoundTransition = false;
+    
+    // 마을 생성
+    this.startVillage();
   }
 }
 

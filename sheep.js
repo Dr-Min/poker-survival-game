@@ -1,11 +1,12 @@
 // sheep.js - 마을에 존재하는 양 관리 클래스
 
 export class Sheep {
-  constructor(canvas, x, y, animationData) {
+  constructor(canvas, x, y, animationData, id = null) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.x = x;
     this.y = y;
+    this.id = id || Math.floor(Math.random() * 10000); // 고유 ID 부여
     
     // 양 상태
     this.states = {
@@ -55,6 +56,11 @@ export class Sheep {
   
   // 양 상태 업데이트
   update(deltaTime, player, otherSheeps) {
+    // 이전 위치 저장 (텔레포트 감지용)
+    const prevX = this.x;
+    const prevY = this.y;
+    const prevState = this.currentState;
+    
     // 너무 큰 deltaTime 제한 (텔레포트 방지)
     const cappedDeltaTime = Math.min(deltaTime, 33); // 최대 33ms (약 30fps)
     
@@ -147,27 +153,57 @@ export class Sheep {
           // 목표 지점으로 빠르게 이동
           this.moveTowardTarget(this.runawaySpeed);
           
-          // 목표에 도착하거나 충분히 도망갔다면
+          // 도망 타이머 업데이트
           this.returnToFlockTimer += cappedDeltaTime;
           
+          // 도망 시간이 충분히 지났으면 일반 상태로 복귀
           if (this.returnToFlockTimer >= 3000) {
-            // 도망치다가 충분한 시간이 지났으면 일반 상태로 복귀
+            // 도망 완료 시 바로 IDLE로 변경하지 않고 MOVE로 전환
             this.returnToFlockTimer = 0;
             this.currentState = this.states.MOVE;
             this.moveDuration = this.getRandomDuration(1500, 3000);
             this.moveTimer = 0;
             this.moveSpeed = 0.5;
             
-            // 무리를 향해 새로운 이동 목표 설정
+            // 무리를 향해 새로운 이동 목표 설정 (급격한 방향 전환 방지)
             if (otherSheeps && otherSheeps.length > 1) {
+              // 현재 목표 위치 저장
+              const currentTargetX = this.targetX;
+              const currentTargetY = this.targetY;
+              
+              // 새로운 목표 설정
               this.setRandomMoveTarget(otherSheeps);
+              
+              // 이전 목표와 새 목표를 블렌딩 (부드러운 전환)
+              if (currentTargetX !== null && currentTargetY !== null) {
+                this.targetX = this.targetX * 0.6 + currentTargetX * 0.4;
+                this.targetY = this.targetY * 0.6 + currentTargetY * 0.4;
+              }
+              
+              console.log(`양#${this.id} 도망 후 이동: 위치=[${this.x.toFixed(1)}, ${this.y.toFixed(1)}], 목표=[${this.targetX.toFixed(1)}, ${this.targetY.toFixed(1)}]`);
             }
           }
         } else {
+          // 목표가 없는 경우 기본 상태로 변경
           this.currentState = this.states.IDLE;
           this.stateTimer = 0;
         }
         break;
+    }
+    
+    // 위치 변화 로깅 (텔레포트 감지)
+    const dx = this.x - prevX;
+    const dy = this.y - prevY;
+    const moveDistance = Math.sqrt(dx * dx + dy * dy);
+    
+    // 상태 변화 또는 큰 위치 변화가 있을 때만 로그
+    if (prevState !== this.currentState || moveDistance > 5) {
+      console.log(`양#${this.id} 위치 변화: [${prevX.toFixed(1)}, ${prevY.toFixed(1)}] -> [${this.x.toFixed(1)}, ${this.y.toFixed(1)}], 이동거리: ${moveDistance.toFixed(1)}, 상태: ${prevState} -> ${this.currentState}, 목표: [${this.targetX?.toFixed(1) || 'null'}, ${this.targetY?.toFixed(1) || 'null'}]`);
+    }
+    
+    // 텔레포트 감지 (한 프레임에 너무 큰 이동)
+    if (moveDistance > 10) {
+      console.warn(`양#${this.id} 텔레포트 감지! 이동거리: ${moveDistance.toFixed(1)}, 상태: ${this.currentState}, deltaTime: ${deltaTime}`);
     }
   }
   
@@ -224,6 +260,14 @@ export class Sheep {
   
   // 플레이어로부터 도망가기
   fleeFromPlayer(player, otherSheeps, isWakeUpFlee = false) {
+    // 이미 도망 중이면 도망 방향만 업데이트
+    const alreadyRunning = this.currentState === this.states.RUNAWAY;
+    
+    // 이전 상태와 목표 저장
+    const prevState = this.currentState;
+    const prevTargetX = this.targetX;
+    const prevTargetY = this.targetY;
+    
     this.currentState = this.states.RUNAWAY;
     
     // 플레이어 반대 방향으로 도망
@@ -235,19 +279,24 @@ export class Sheep {
       // 플레이어 반대 방향으로 점진적으로 이동 - 목표 거리를 줄여서 더 자연스럽게 이동
       const fleeDistance = 100 + Math.random() * 50; // 200~300에서 100~150으로 줄임
       
+      // 새 도망 목표 계산
+      const rawTargetX = this.x + (dx / distance) * fleeDistance;
+      const rawTargetY = this.y + (dy / distance) * fleeDistance;
+      
       // 기존 타겟이 있으면 점진적으로 변경, 없으면 새로 설정
-      if (this.targetX !== null && this.targetY !== null) {
-        // 새 타겟을 향해 기존 타겟을 서서히 변경
-        const newTargetX = this.x + (dx / distance) * fleeDistance;
-        const newTargetY = this.y + (dy / distance) * fleeDistance;
-        
-        // 기존 타겟과 새 타겟을 블렌딩 (부드러운 전환)
-        this.targetX = this.targetX * 0.3 + newTargetX * 0.7;
-        this.targetY = this.targetY * 0.3 + newTargetY * 0.7;
+      if (alreadyRunning && this.targetX !== null && this.targetY !== null) {
+        // 이미 도망 중인 경우, 현재 목표를 크게 변경하지 않음 (안정성)
+        // 새 타겟을 향해 기존 타겟을 서서히 변경 (30% 비중만 새 목표에 할당)
+        this.targetX = this.targetX * 0.7 + rawTargetX * 0.3;
+        this.targetY = this.targetY * 0.7 + rawTargetY * 0.3;
+      } else if (prevTargetX !== null && prevTargetY !== null) {
+        // 이전 목표가 있었다면 약간의 연속성 유지 (50/50 비중)
+        this.targetX = prevTargetX * 0.5 + rawTargetX * 0.5;
+        this.targetY = prevTargetY * 0.5 + rawTargetY * 0.5;
       } else {
-        // 새 타겟 설정
-        this.targetX = this.x + (dx / distance) * fleeDistance;
-        this.targetY = this.y + (dy / distance) * fleeDistance;
+        // 새 타겟 설정 (이전 목표가 없는 경우)
+        this.targetX = rawTargetX;
+        this.targetY = rawTargetY;
       }
       
       // 다른 양들 방향으로 더 강하게 편향시켜 무리로 모이게 함
@@ -270,7 +319,8 @@ export class Sheep {
           flockCenterY /= count;
           
           // 무리 중심으로 더 강하게 편향
-          const flockInfluence = isWakeUpFlee ? 0.7 : 0.5; // 0.6/0.3에서 0.7/0.5로 증가
+          // 일어난 직후이거나 이미 도망 중인 경우 더 강한 무리 영향
+          const flockInfluence = isWakeUpFlee ? 0.7 : (alreadyRunning ? 0.6 : 0.5);
           this.targetX = this.targetX * (1 - flockInfluence) + flockCenterX * flockInfluence;
           this.targetY = this.targetY * (1 - flockInfluence) + flockCenterY * flockInfluence;
         }
@@ -280,11 +330,30 @@ export class Sheep {
       this.targetX = Math.max(50, Math.min(this.canvas.width - 50, this.targetX));
       this.targetY = Math.max(50, Math.min(this.canvas.height - 50, this.targetY));
       
-      // 방향 설정
-      this.direction = dx > 0 ? -1 : 1;
+      // 방향 설정 - 갑작스럽게 방향을 바꾸지 않음
+      if (!alreadyRunning) {
+        this.direction = dx > 0 ? -1 : 1;
+      }
       
       // 도망 속도 설정 (일어난 직후라면 2배 빠르게) - 속도를 약간 줄여 더 자연스러운 이동
-      this.moveSpeed = isWakeUpFlee ? this.runawaySpeed * 1.8 : this.runawaySpeed * 0.9;
+      const baseFlee = alreadyRunning ? this.runawaySpeed * 0.95 : this.runawaySpeed * 0.9;
+      this.moveSpeed = isWakeUpFlee ? this.runawaySpeed * 1.8 : baseFlee;
+      
+      // 도망 타이머 초기화 (이미 도망 중이면 타이머 유지)
+      if (!alreadyRunning) {
+        this.returnToFlockTimer = 0;
+      }
+      
+      // 상태가 변경되었거나 목표가 크게 변경된 경우에만 로그 출력
+      const targetChanged = 
+        prevTargetX === null || 
+        prevTargetY === null || 
+        Math.abs(this.targetX - prevTargetX) > 30 || 
+        Math.abs(this.targetY - prevTargetY) > 30;
+        
+      if (prevState !== this.states.RUNAWAY || targetChanged) {
+        console.log(`양#${this.id} 도망 ${alreadyRunning ? '방향 변경' : '시작'}: 상태 ${prevState} -> ${this.currentState}, 플레이어와 거리: ${distance.toFixed(1)}, 목표: [${prevTargetX?.toFixed(1) || 'null'}, ${prevTargetY?.toFixed(1) || 'null'}] -> [${this.targetX.toFixed(1)}, ${this.targetY.toFixed(1)}], 속도: ${this.moveSpeed.toFixed(2)}, 일어난 직후: ${isWakeUpFlee}`);
+      }
     }
   }
   
@@ -364,6 +433,9 @@ export class Sheep {
     const dy = this.targetY - this.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
+    // 각 프레임마다 최대 이동 거리 제한 (텔레포트 방지)
+    const maxMovePerFrame = this.currentState === this.states.RUNAWAY ? 2.0 : 1.0;
+    
     // 목표까지의 거리에 따라 이동 속도 조절 (가까울수록 느리게)
     let adjustedSpeed = speed;
     if (distance < 30) {
@@ -376,9 +448,19 @@ export class Sheep {
       const targetAngle = Math.atan2(dy, dx);
       const moveAngle = targetAngle + (Math.random() - 0.5) * 0.2; // 약간의 무작위성 추가
       
-      const actualSpeed = Math.max(0.1, adjustedSpeed); // 최소 속도 보장
-      this.x += Math.cos(moveAngle) * actualSpeed;
-      this.y += Math.sin(moveAngle) * actualSpeed;
+      const actualSpeed = Math.min(maxMovePerFrame, Math.max(0.1, adjustedSpeed)); // 최소/최대 속도 보장
+      
+      // 실제 이동하는 거리 계산 (최대 이동 거리 제한)
+      const moveDistance = Math.min(distance, actualSpeed);
+      
+      // 이동 적용 (텔레포트 방지를 위해 moveDistance 사용)
+      this.x += Math.cos(moveAngle) * moveDistance;
+      this.y += Math.sin(moveAngle) * moveDistance;
+      
+      // 로그 추가 (디버그용)
+      if (moveDistance > maxMovePerFrame * 0.9) {
+        console.log(`양#${this.id} 최대 속도로 이동: 거리=${moveDistance.toFixed(2)}, 상태=${this.currentState}, 목표까지=${distance.toFixed(2)}`);
+      }
       
       // 방향 설정 - 적응형 방향 전환 (급격한 방향 전환 방지)
       const directionTarget = dx > 0 ? 1 : -1;
@@ -393,9 +475,12 @@ export class Sheep {
     } else {
       // 목표 도달 시 점진적으로 다음 상태로 전환
       if (this.currentState === this.states.RUNAWAY) {
-        this.currentState = this.states.IDLE;
+        // 도망 상태에서는 즉시 idle로 변경하지 않고, move로 전환
+        this.currentState = this.states.MOVE;
+        this.moveTimer = 0;
+        this.moveDuration = this.getRandomDuration(500, 1000);
+        console.log(`양#${this.id} 도망 완료: 위치=[${this.x.toFixed(1)}, ${this.y.toFixed(1)}], 목표=[${this.targetX.toFixed(1)}, ${this.targetY.toFixed(1)}]`);
       }
-      // MOVE 상태인 경우 즉시 상태를 변경하지 않고 moveTimer를 통해 처리
       
       // 새로운 목표 설정 (기존 목표는 유지)
       if (Math.random() < 0.1) { // 10% 확률로 목표 초기화
@@ -443,7 +528,7 @@ export class Sheep {
     
     // 상태 변경 시 로그 (디버깅용)
     if (prevState !== this.currentState) {
-      console.log(`양 상태 변경: ${prevState} -> ${this.currentState}, 위치: x=${this.x.toFixed(0)}, y=${this.y.toFixed(0)}`);
+      console.log(`양#${this.id} 상태 변경: ${prevState} -> ${this.currentState}, 위치: x=${this.x.toFixed(0)}, y=${this.y.toFixed(0)}`);
     }
   }
   

@@ -68,6 +68,9 @@ export class Village {
     
     // 이벤트 리스너 초기화
     this.initEventListeners();
+    
+    // 플레이어 객체 저장 변수 추가
+    this.player = null;
   }
   
   // 이벤트 리스너 초기화
@@ -102,8 +105,20 @@ export class Village {
     
     // 우클릭 이벤트 처리 (기본 컨텍스트 메뉴 방지)
     this.canvas.addEventListener("contextmenu", (e) => {
-      if (this.game.isEditMode && this.game.isVillageMode) {
-        e.preventDefault();
+      e.preventDefault(); // 항상 기본 컨텍스트 메뉴 동작 막기
+      
+      // 편집 모드가 아닐 때는 대시 기능 활성화
+      if (!this.game.isEditMode && this.player) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        // 플레이어에게 대시 명령 전달
+        console.log("우클릭 대시 명령 전달", x, y);
+        this.player.dash(x, y);
       }
     });
     
@@ -455,11 +470,11 @@ export class Village {
         
         try {
           // 새 양 인스턴스 생성 및 추가
-          const sheep = new Sheep(this.canvas, x, y, this.sheepAnimator.getAnimations());
+          const sheep = new Sheep(this.canvas, x, y, this.sheepAnimator.getAnimations(), i+1);
           this.sheeps.push(sheep);
-          console.log(`양 #${i+1} 생성 완료: x=${x.toFixed(0)}, y=${y.toFixed(0)}`);
+          console.log(`양#${i+1} 생성 완료: x=${x.toFixed(0)}, y=${y.toFixed(0)}`);
         } catch (error) {
-          console.error(`양 #${i+1} 생성 중 오류 발생:`, error);
+          console.error(`양#${i+1} 생성 중 오류 발생:`, error);
         }
       }
       
@@ -504,6 +519,10 @@ export class Village {
   
   // 양 위치 조정 (충돌 방지)
   adjustSheepPosition(sheep) {
+    // 이전 위치 저장 (텔레포트 감지용)
+    const prevX = sheep.x;
+    const prevY = sheep.y;
+    
     // 건물과의 충돌 처리
     for (const building of this.buildings) {
       // 양과 건물 사이의 거리 계산
@@ -547,6 +566,9 @@ export class Village {
             sheep.targetY = sheep.y + (dy / distance) * newTargetDist;
           }
         }
+        
+        // 충돌로 인한 위치 변화 로깅
+        console.log(`양#${sheep.id} 건물 충돌 조정: [${prevX.toFixed(1)}, ${prevY.toFixed(1)}] -> [${sheep.x.toFixed(1)}, ${sheep.y.toFixed(1)}], 건물: ${building.name}, 거리: ${distance.toFixed(1)}, 최소거리: ${minDistance.toFixed(1)}`);
       }
     }
     
@@ -583,12 +605,32 @@ export class Village {
           sheep.targetY = sheep.y + (dwy / warpDistance) * newTargetDist;
         }
       }
+      
+      // 워프 포인트 충돌로 인한 위치 변화 로깅
+      console.log(`양#${sheep.id} 워프포인트 충돌 조정: [${prevX.toFixed(1)}, ${prevY.toFixed(1)}] -> [${sheep.x.toFixed(1)}, ${sheep.y.toFixed(1)}], 거리: ${warpDistance.toFixed(1)}`);
     }
     
     // 화면 밖으로 나가지 않도록 함
     const margin = 50;
+    const oldX = sheep.x;
+    const oldY = sheep.y;
+    
     sheep.x = Math.max(margin, Math.min(this.canvas.width - margin, sheep.x));
     sheep.y = Math.max(margin, Math.min(this.canvas.height - margin, sheep.y));
+    
+    // 화면 경계 충돌 로깅
+    if (oldX !== sheep.x || oldY !== sheep.y) {
+      console.log(`양#${sheep.id} 화면경계 충돌 조정: [${oldX.toFixed(1)}, ${oldY.toFixed(1)}] -> [${sheep.x.toFixed(1)}, ${sheep.y.toFixed(1)}]`);
+    }
+    
+    // 전체 위치 변화 로깅
+    const totalDx = sheep.x - prevX;
+    const totalDy = sheep.y - prevY;
+    const totalDistance = Math.sqrt(totalDx * totalDx + totalDy * totalDy);
+    
+    if (totalDistance > 5) {
+      console.warn(`양#${sheep.id} 위치 강제 조정 감지: [${prevX.toFixed(1)}, ${prevY.toFixed(1)}] -> [${sheep.x.toFixed(1)}, ${sheep.y.toFixed(1)}], 이동거리: ${totalDistance.toFixed(1)}`);
+    }
   }
   
   // 양 그리기 함수
@@ -615,6 +657,22 @@ export class Village {
   
   // 마우스 이벤트 핸들러 수정 - 다각형 편집과 기존 코드를 통합
   handleMouseDown(e) {
+    // 우클릭 감지
+    if (e.button === 2 && this.player && !this.game.isEditMode) {
+      e.preventDefault();
+      const rect = this.canvas.getBoundingClientRect();
+      const scaleX = this.canvas.width / rect.width;
+      const scaleY = this.canvas.height / rect.height;
+
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      // 플레이어에게 대시 명령 전달
+      this.player.dash(x, y);
+      return;
+    }
+    
+    // 기존 코드 계속 실행 (에디트 모드 관련)
     if (!this.game.isEditMode || !this.game.isVillageMode) return;
     
     const rect = this.canvas.getBoundingClientRect();
@@ -1376,11 +1434,9 @@ export class Village {
     if (keys.ArrowDown || keys.s) dy += player.speed;
     if (keys.ArrowLeft || keys.a) {
       dx -= player.speed;
-      player.facingLeft = true; // 왼쪽을 향하도록 유지
     }
     if (keys.ArrowRight || keys.d) {
       dx += player.speed;
-      player.facingLeft = false; // 오른쪽을 향하도록 수정
     }
     
     // 이동이 없으면 처리 중단
@@ -1666,9 +1722,17 @@ export class Village {
 
   // 마을 업데이트
   update(deltaTime, player) {
-    // 양 업데이트
+    // player 객체 업데이트
     if (player) {
-      this.updateSheeps(deltaTime, player);
+      this.player = player;
     }
+    
+    // 양 업데이트
+    this.updateSheeps(deltaTime, player);
+  }
+
+  // 플레이어 객체를 저장하는 메서드 추가
+  setPlayer(player) {
+    this.player = player;
   }
 } 
