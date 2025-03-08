@@ -255,9 +255,13 @@ export class Game {
       if (this.village.tryInteractWithWarpPoint()) {
         this.isVillageMode = false;
         this.isStartScreen = false; // 시작 화면 상태 비활성화
-        this.startGame();
         
-        // 첫 라운드 직접 시작 (round 증가 없이)
+        // 게임 시작 상태만 초기화하고 라운드는 유지
+        this.isGameOver = false;
+        this.isPaused = false;
+        this.isPokerPhase = false;
+        
+        // 첫 라운드 직접 시작 (round 초기화하지 않음)
         this.isRoundTransition = false;
         this.roundStartTime = Date.now();
         this.isSpawningEnemies = true;
@@ -605,7 +609,12 @@ export class Game {
     this.isPaused = false;
     this.isPokerPhase = false;
     this.isStartScreen = false; // 시작 화면 상태 명시적으로 비활성화
-    this.round = 1;
+    
+    // 처음 게임을 시작할 때만 라운드를 1로 초기화
+    if (!this.round || this.round < 1) {
+      this.round = 1;
+    }
+    
     this.score = 0;
 
     // 전역 게임 객체 설정
@@ -1969,7 +1978,8 @@ export class Game {
     console.log("라운드 시작");
     this.isVillageMode = false;
     this.player.setModeSpeed(this.isVillageMode); // 전투 모드 속도로 설정
-    this.round = 1;
+    
+    // 라운드 초기화는 제거 (startNextRound에서 증가하기 때문)
     this.enemiesKilledInRound = 0;
     this.enemiesRequiredForNextRound = 10;
     this.roundStartTime = Date.now();
