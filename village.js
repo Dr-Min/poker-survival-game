@@ -3,6 +3,7 @@
 // 양 관련 클래스 import
 import { Sheep } from './sheep.js';
 import { SheepAnimator } from './sheepAnimator.js';
+import { Chest } from './chest.js';
 
 export class Village {
   constructor(canvas, game) {
@@ -32,6 +33,14 @@ export class Village {
     this.sheepAnimator = new SheepAnimator();
     this.sheeps = [];
     this.numSheeps = 3; // 양 마릿수
+    
+    // 상자 관련 속성 추가
+    this.chests = [];
+    this.numChests = 1; // 마을에 생성할 상자 수를 1개로 변경
+    this.totalChipsCollected = 0; // 수집한 총 칩 수
+    this.autoTransitionThreshold = 100; // 자동 전환을 위한 임계값
+    this.showTransitionMessage = false; // 전환 메시지 표시 여부
+    this.transitionMessageTime = 0; // 전환 메시지 표시 시간
     
     // 기본 레이아웃 설정 (사용자 제공 데이터)
     const defaultLayout = {
@@ -672,6 +681,27 @@ export class Village {
       return;
     }
     
+    // 일반 클릭 (좌클릭) 처리 - 상자 열기
+    if (e.button === 0 && !this.game.isEditMode) {
+      const rect = this.canvas.getBoundingClientRect();
+      const mouseX = (e.clientX - rect.left) * (this.canvas.width / rect.width);
+      const mouseY = (e.clientY - rect.top) * (this.canvas.height / rect.height);
+      
+      // 클릭한 위치에 상자가 있는지 확인
+      for (const chest of this.chests) {
+        const dx = mouseX - chest.x;
+        const dy = mouseY - chest.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // 상자를 클릭했고, 아직 열리지 않았으면 열기
+        if (distance < chest.size / 2 && !chest.isOpened && !chest.isAnimating) {
+          chest.open();
+          console.log("상자가 클릭으로 열렸습니다!");
+          return;
+        }
+      }
+    }
+    
     // 기존 코드 계속 실행 (에디트 모드 관련)
     if (!this.game.isEditMode || !this.game.isVillageMode) return;
     
@@ -1296,16 +1326,7 @@ export class Village {
   
   // 상호작용 안내 메시지 표시
   drawInstructions(player) {
-    if (this.warpPoint.active) {
-      this.ctx.fillStyle = "#ffffff";
-      this.ctx.font = "18px Arial";
-      this.ctx.textAlign = "center";
-      this.ctx.fillText(
-        "E키를 눌러 게임 시작",
-        this.warpPoint.x,
-        this.warpPoint.y - this.warpPoint.radius - 20
-      );
-    }
+    // 워프 포인트 안내 메시지 제거됨
     
     // 편집 모드 안내 메시지
     if (this.game.isEditMode && this.game.isVillageMode) {
@@ -1318,21 +1339,37 @@ export class Village {
         this.canvas.height - 20
       );
     }
-  }
-  
-  // 워프 포인트와 상호작용 시도
-  tryInteractWithWarpPoint() {
-    if (this.warpPoint.active) {
-      console.log("워프 포인트 활성화 - 게임 라운드 시작");
-      // 게임 모드를 마을에서 라운드 모드로 변경
-      if (this.game.startRound) {
-        this.game.startRound(); // 게임의 startRound 메서드 호출
-      } else {
-        // 기존 호환성을 위한 코드
-        this.game.isVillageMode = false;
-        this.game.player.setModeSpeed(false); // 전투 모드 속도 설정
+    
+    // 상자 열기 안내 메시지 추가
+    for (const chest of this.chests) {
+      if (!chest.isOpened && !chest.isAnimating) {
+        // 플레이어가 상자 근처에 있을 때만 표시
+        const dx = player.x - chest.x;
+        const dy = player.y - chest.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < chest.size * 2) {
+          this.ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+          this.ctx.font = "14px Arial";
+          this.ctx.textAlign = "center";
+          this.ctx.fillText(
+            "상자를 열려면 클릭하세요",
+            chest.x,
+            chest.y - chest.size - 10
+          );
+        }
       }
     }
+  }
+  
+  // 워프 포인트와 상호작용 시도 (이제는 사용하지 않음)
+  tryInteractWithWarpPoint() {
+    return false; // 워프 포인트 제거로 항상 false 반환
+  }
+
+  // 워프 포인트 그리기 (숨김 처리)
+  drawWarpPoint(player) {
+    // 워프 포인트 그리지 않음
   }
   
   // 건물 이동 시 히트박스 업데이트
@@ -1381,15 +1418,15 @@ export class Village {
     // 플레이어보다 앞에 있는 양 그리기
     this.drawSheepsBehindPlayer(player);
     
-    // 편집 모드 UI 그리기
+    // 상자 그리기
+    this.drawChests();
+    
+    // 에디터 모드 UI 그리기
     if (this.game.isEditMode) {
       this.drawEditModeUI();
     }
     
-    // 플레이어 충돌 영역 시각화 (마름모꼴 형태)
-    this.drawPlayerCollisionArea(player);
-    
-    // 마을 안내 메시지 그리기
+    // 게임 인스트럭션 그리기
     this.drawInstructions(player);
   }
   
@@ -1729,10 +1766,173 @@ export class Village {
     
     // 양 업데이트
     this.updateSheeps(deltaTime, player);
+    
+    // 상자 업데이트
+    this.updateChests(player);
   }
 
   // 플레이어 객체를 저장하는 메서드 추가
   setPlayer(player) {
     this.player = player;
+  }
+
+  // 상자 초기화 메서드 추가
+  initChests() {
+    this.chests = [];
+    console.log("상자 초기화 시작...");
+    
+    // 마을 내 랜덤 위치에 상자 배치
+    for (let i = 0; i < this.numChests; i++) {
+      let x, y;
+      let validPosition = false;
+      let attempts = 0;
+      const maxAttempts = 100; // 최대 시도 횟수 제한
+      
+      // 건물이나 워프 포인트와 겹치지 않는 위치 찾기
+      while (!validPosition && attempts < maxAttempts) {
+        attempts++;
+        
+        // 화면 내 랜덤 위치 (가장자리에서 조금 떨어짐)
+        x = 100 + Math.random() * (this.canvas.width - 200);
+        y = 100 + Math.random() * (this.canvas.height - 200);
+        
+        // 워프 포인트와의 거리 확인
+        const distToWarp = Math.sqrt(
+          Math.pow(x - this.warpPoint.x, 2) + 
+          Math.pow(y - this.warpPoint.y, 2)
+        );
+        
+        // 건물과의 충돌 확인
+        let collidesWithBuilding = false;
+        for (const building of this.buildings) {
+          if (this.isPointNearBuilding(x, y, building, 50)) {
+            collidesWithBuilding = true;
+            break;
+          }
+        }
+        
+        // 다른 상자와의 거리 확인
+        let tooCloseToChest = false;
+        for (const chest of this.chests) {
+          const distToChest = Math.sqrt(
+            Math.pow(x - chest.x, 2) + Math.pow(y - chest.y, 2)
+          );
+          if (distToChest < 100) {
+            tooCloseToChest = true;
+            break;
+          }
+        }
+        
+        // 워프 포인트, 건물, 다른 상자와 충분히 떨어져 있으면 유효
+        validPosition = distToWarp > 150 && !collidesWithBuilding && !tooCloseToChest;
+      }
+      
+      // 유효한 위치를 찾지 못했다면 중앙에 배치
+      if (!validPosition) {
+        console.warn(`유효한 상자 위치를 ${maxAttempts}번 시도 후에도 찾지 못했습니다. 화면 중앙에 배치합니다.`);
+        x = this.canvas.width / 2;
+        y = this.canvas.height / 2;
+      }
+      
+      // 상자 추가
+      const newChest = new Chest(x, y, 60); // 크기를 조금 키움 (50 -> 60)
+      this.chests.push(newChest);
+      console.log(`상자 #${i+1} 생성: (${x}, ${y})`);
+    }
+    
+    console.log(`${this.chests.length}개의 상자가 마을에 배치되었습니다.`);
+  }
+  
+  // 상자 업데이트 로직
+  updateChests(player) {
+    if (!player) return;
+    
+    // 각 상자 업데이트
+    this.chests.forEach(chest => {
+      chest.update();
+      
+      // 플레이어가 상자 근처에 있고, 상자가 아직 열리지 않았으면
+      if (!chest.isOpened && !chest.isAnimating && chest.checkPlayerCollision(player)) {
+        chest.open();
+        console.log("상자가 열렸습니다!");
+      }
+      
+      // 칩 수집 처리
+      const collectedValue = chest.updateChips(player);
+      if (collectedValue > 0) {
+        // 칩 가치만큼 플레이어 체력 증가 및 수집 카운터 업데이트
+        player.chips = Math.min(player.chips + collectedValue, player.chipBag);
+        this.totalChipsCollected += collectedValue;
+        
+        console.log(`칩 ${collectedValue}개 수집 (총 ${this.totalChipsCollected}/${this.autoTransitionThreshold})`);
+        
+        // 칩이 임계값에 도달했는지 확인
+        if (this.totalChipsCollected >= this.autoTransitionThreshold && !this.showTransitionMessage) {
+          // 전환 메시지 표시 시작
+          this.showTransitionMessage = true;
+          this.transitionMessageTime = Date.now();
+          
+          // 일정 시간 후 게임 모드로 전환
+          setTimeout(() => {
+            if (this.game && this.game.isVillageMode) {
+              console.log("칩이 충분히 모였습니다! 게임 라운드로 전환합니다.");
+              this.game.isVillageMode = false;
+              this.game.isStartScreen = false;
+              
+              // 게임 상태 초기화 (라운드는 유지)
+              this.game.isGameOver = false;
+              this.game.isPaused = false;
+              this.game.isPokerPhase = false;
+              
+              // 플레이어 체력 확인 - 게임 시작 시 최소 체력 1 보장
+              if (player.chips <= 0) {
+                player.chips = 1;
+                console.log("게임 전환 시 최소 체력 보장: 칩 = 1");
+              }
+              
+              // 라운드 시작
+              this.game.isRoundTransition = false;
+              this.game.roundStartTime = Date.now();
+              this.game.isSpawningEnemies = true;
+              this.game.enemiesKilledInRound = 0;
+              
+              // 플레이어 전투 모드 속도 설정
+              player.setModeSpeed(false);
+            }
+          }, 2000);
+        }
+      }
+    });
+  }
+  
+  // 상자 그리기
+  drawChests() {
+    this.chests.forEach(chest => {
+      chest.draw(this.ctx);
+    });
+    
+    // 전환 메시지 표시
+    if (this.showTransitionMessage) {
+      const elapsed = Date.now() - this.transitionMessageTime;
+      
+      if (elapsed < 3000) { // 3초 동안 메시지 표시
+        this.ctx.save();
+        
+        // 메시지 배경
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillRect(this.canvas.width/2 - 200, this.canvas.height/2 - 50, 400, 100);
+        
+        // 메시지 텍스트
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = '24px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('충분한 칩을 모았습니다!', this.canvas.width/2, this.canvas.height/2 - 15);
+        this.ctx.fillText('게임 라운드로 곧 전환됩니다...', this.canvas.width/2, this.canvas.height/2 + 15);
+        
+        this.ctx.restore();
+      } else {
+        this.showTransitionMessage = false;
+      }
+    }
   }
 } 

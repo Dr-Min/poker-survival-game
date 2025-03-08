@@ -250,26 +250,8 @@ export class Game {
       this.isPaused = !this.isPaused;
     }
 
-    // 마을 모드에서 E 키 누르면 워프 포인트와 상호작용
-    if (this.isVillageMode && e.key.toLowerCase() === "e") {
-      if (this.village.tryInteractWithWarpPoint()) {
-        this.isVillageMode = false;
-        this.isStartScreen = false; // 시작 화면 상태 비활성화
-        
-        // 게임 시작 상태만 초기화하고 라운드는 유지
-        this.isGameOver = false;
-        this.isPaused = false;
-        this.isPokerPhase = false;
-        
-        // 첫 라운드 직접 시작 (round 초기화하지 않음)
-        this.isRoundTransition = false;
-        this.roundStartTime = Date.now();
-        this.isSpawningEnemies = true;
-        this.enemiesKilledInRound = 0;
-      }
-      return;
-    }
-
+    // 워프 포인트 관련 E키 처리는 제거됨
+    
     // 마을 모드가 아닐 때 E 키를 눌렀을 때 근처 카드 수집
     if (!this.isVillageMode && e.key.toLowerCase() === "e") {
       if (this.cardManager.collectNearbyCard()) {
@@ -940,6 +922,23 @@ export class Game {
     // 배경 그리기 (투명)
     this.ctx.fillStyle = "rgba(0, 0, 0, 0)";
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 마을 모드일 때
+    if (this.isVillageMode) {
+      // 마을 그리기
+      this.village.draw(this.player);
+      
+      // 마을 모드에서도 플레이어 UI 표시
+      const gameState = {
+        player: this.player,
+        effects: this.effects ? this.effects.getEffects() : {},
+        isBossBattle: false,
+        isVillageMode: true
+      };
+      this.ui.drawGameUI(gameState);
+      
+      return;
+    }
 
     // 보스 공격 판정 영역 그리기
     if (this.currentBossAttack) {
@@ -1987,6 +1986,12 @@ export class Game {
     this.isSpawningEnemies = true;
     this.isBossBattle = false;
     
+    // 플레이어 체력 확인 - 게임 시작 시 최소 체력 1 보장
+    if (this.player.chips <= 0) {
+      this.player.chips = 1;
+      console.log("게임 시작 시 최소 체력 보장: 칩 = 1");
+    }
+    
     // 포커 시스템 초기화 - 메서드 이름 수정
     if (this.pokerSystem && typeof this.pokerSystem.resetGame === 'function') {
       this.pokerSystem.resetGame();
@@ -2014,8 +2019,14 @@ export class Game {
     // 양을 생성하는 코드
     this.village.initSheeps();
     
+    // 상자 초기화 추가
+    this.village.initChests();
+    
     // 플레이어 이동 속도 조정 (마을에서는 더 느리게)
     this.player.setModeSpeed(true);
+    
+    // 수집한 칩 초기화
+    this.village.totalChipsCollected = 0;
   }
 
   updateVillageMode() {

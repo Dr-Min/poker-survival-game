@@ -9,8 +9,8 @@ export class Player {
     this.villageSpeed = 0.8; // 마을 모드에서의 속도
     this.combatSpeed = 1.6; // 전투 모드에서의 속도
     this.speed = this.villageSpeed; // 기본은 마을 모드 속도
-    this.chips = 100;
-    this.chipBag = 100;
+    this.chips = 0; // 칩을 0으로 시작 (마을에서 상자를 열어 모아야 함)
+    this.chipBag = 100; // 칩 최대 용량은 그대로 유지
     console.log(
       "플레이어 초기화: 칩=" + this.chips + ", 칩주머니=" + this.chipBag
     );
@@ -500,8 +500,8 @@ export class Player {
       );
     }
 
-    // 체력이 0이 되면 게임오버 처리
-    if (this.chips <= 0 && window.game) {
+    // 체력이 0이 되면 게임오버 처리 - 마을 모드에서는 예외
+    if (this.chips <= 0 && window.game && !window.game.isVillageMode) {
       window.game.stopGame();
       return true;
     }

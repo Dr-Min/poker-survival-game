@@ -333,7 +333,6 @@
    { "name": "Bronze", "from": 80, "to": 119, "direction": "forward", "color": "#000000ff" }
   ],
   "layers": [
-   { "name": "bg", "opacity": 255, "blendMode": "normal" },
    { "name": "shadow", "opacity": 255, "blendMode": "normal" },
    { "name": "chesy", "opacity": 255, "blendMode": "normal" },
    { "name": "vfx", "opacity": 255, "blendMode": "normal" }
